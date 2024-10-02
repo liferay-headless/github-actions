@@ -9,6 +9,6 @@ jobs:
   sync_liferay_portal:
     runs-on: ubuntu-latest
     steps:
-      - run: gh repo sync liferay-frontend/liferay-portal --source liferay/liferay-portal --branch master
+      - run: gh repo sync liferay-headless/liferay-portal --source liferay/liferay-portal --branch master
         env:
           GH_TOKEN: ${{ secrets.PAT }}
