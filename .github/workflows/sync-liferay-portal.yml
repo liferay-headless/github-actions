@@ -9,6 +9,28 @@ jobs:
   sync_liferay_portal:
     runs-on: ubuntu-latest
     steps:
-      - run: gh repo sync liferay-headless/liferay-portal --source liferay/liferay-portal --branch master
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.repository }}
+          path: github-actions
+
+      - name: Checkout liferay-headless/liferay-portal
+        uses: actions/checkout@v3
+        with:
+          repository: 'liferay-headless/liferay-portal'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: liferay-portal
+
+      - name: Sync and find intruders 🦹‍♂️
+        run: |
+          cd liferay-portal
+          SHA=$(git rev-parse HEAD)
+          gh repo sync liferay-headless/liferay-portal --source liferay/liferay-portal --branch master
+          git pull origin master
+          ../github-actions/scripts/intruders.sh "$SHA" > intruders.txt
+          if grep -q "Intruders" intruders.txt; then
+            gh issue create --title "Intruders 🦹‍♂️" --body "$(cat intruders.txt)" --repo liferay-headless/liferay-portal
+          fi
         env:
           GH_TOKEN: ${{ secrets.PAT }}
