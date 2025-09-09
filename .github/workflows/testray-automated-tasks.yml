@@ -1,0 +1,40 @@
+name: Run TestrayAutomatedTasks
+
+on:
+  schedule:
+    # Runs at 8 AM every weekday (Monday to Friday)
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch:  # Allows manual trigger too
+
+jobs:
+  run-testray:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout liferay-headless/github-actions
+        uses: actions/checkout@v3
+
+      - name: Checkout TestrayAutomatedTasks repo
+        uses: actions/checkout@v3
+        with:
+          repository: magjed4289/TestrayAutomatedTasks
+          path: testray
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies and run script
+        env:
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          TOKEN: ${{ secrets.TOKEN }}
+          USER: ${{ secrets.USER }}
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r testray/requirements.txt
+          cd testray/liferay/teams/headless
+          python3 headless_testray.py
