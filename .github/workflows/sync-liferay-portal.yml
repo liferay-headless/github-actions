@@ -21,6 +21,7 @@ jobs:
           repository: 'liferay-headless/liferay-portal'
           token: ${{ secrets.GITHUB_TOKEN }}
           path: liferay-portal
+          fetch-depth: 4800
 
       - name: Sync and find intruders 🦹‍♂️
         run: |
@@ -28,7 +29,7 @@ jobs:
           SHA=$(git rev-parse HEAD)
           gh repo sync liferay-headless/liferay-portal --source liferay/liferay-portal --branch master
           git pull origin master
-          ../github-actions/scripts/intruders.sh "$SHA" > intruders.txt
+          ../github-actions/scripts/intruders.sh "97f4c1b0da4b5de53e8fbe7f0dc10a0e820df2b1" > intruders.txt
           if grep -q "Intruders" intruders.txt; then
             gh issue create --title "Intruders 🦹‍♂️" --body "$(cat intruders.txt)" --repo liferay-headless/liferay-portal
           fi
