@@ -36,7 +36,6 @@ EE_PULL_REQUEST_ROUTINE_ID = 45357
 
 
 def get_access_token():
-    print(f'MY DREDENTIALS: {CLIENT_ID}:{CLIENT_SECRET}')
     response = requests.post(
         TOKEN_URL,
         headers={
