@@ -5,5 +5,4 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-cd liferay/teams/headless
-python3 headless_testray.py
+python3 liferay/teams/headless/headless_testray.py
