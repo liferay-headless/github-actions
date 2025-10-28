@@ -20,16 +20,11 @@ jobs:
           cache: 'pip'
 
       - name: Analyze TestRay results
-        working-directory: scripts/testray_automation_tasks
         env:
           TESTRAY_CLIENT_ID: ${{ secrets.TESTRAY_CLIENT_ID }}
           TESTRAY_CLIENT_SECRET: ${{ secrets.TESTRAY_CLIENT_SECRET }}
           JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
           JIRA_USER: ${{ secrets.JIRA_USER }}
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          cd liferay/teams/headless
-          python3 headless_testray.py
+          ./scripts/analyze-testray-results.sh
+
