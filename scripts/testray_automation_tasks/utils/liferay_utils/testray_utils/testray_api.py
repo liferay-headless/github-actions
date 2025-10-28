@@ -16,7 +16,7 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 
 # If any are missing, load from local .env file (for local dev)
 if not all([CLIENT_ID, CLIENT_SECRET]):
-    env_path = Path(__file__).resolve().parents[6].parent / ".automated_tasks.env"
+    env_path = Path(__file__).resolve().parents[6] / ".automated_tasks.env"
     load_dotenv(dotenv_path=env_path)
 
     CLIENT_ID = os.getenv("CLIENT_ID")
