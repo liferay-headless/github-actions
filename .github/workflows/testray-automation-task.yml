@@ -1,0 +1,36 @@
+# .github/workflows/rta.yml
+name: Run TestrayAutomatedTasks
+
+on:
+  schedule:
+    # Runs at 8 AM every Monday and Wednesday
+    - cron: '0 6 * * 1,3'
+  workflow_dispatch:  # Allows manual trigger too
+
+jobs:
+  run-testray:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'  # use your Python version
+
+      - name: Install dependencies and run script
+        env:
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          TOKEN: ${{ secrets.TOKEN }}
+          USER: ${{ secrets.USER }}
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          cd liferay/teams/headless
+          python3 headless_testray.py
+
