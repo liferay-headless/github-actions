@@ -28,9 +28,6 @@ if not TESTRAY_CLIENT_ID or not TESTRAY_CLIENT_SECRET:
 
 TOKEN_URL = "https://testray.liferay.com/o/oauth2/token"
 
-SESSION_ID = os.getenv("SESSION_ID")
-CSRF_TOKEN = os.getenv("CSRF_TOKEN")
-
 # =============================== CONSTANTS ===============================
 
 BASE_URL = "https://testray.liferay.com/o/c"
@@ -59,11 +56,6 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-HEADERS2 = {
-    "Cookie": f"JSESSIONID={SESSION_ID}",
-    "x-csrf-token": CSRF_TOKEN,
-    "Accept": "application/json"
-}
 # Status filters
 STATUS_FAILED_BLOCKED_TESTFIX = "FAILED,TESTFIX,BLOCKED"
 STATUS_FAILED_PASSED = "FAILED,PASSED"
