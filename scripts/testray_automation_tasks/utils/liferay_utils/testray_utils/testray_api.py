@@ -22,6 +22,10 @@ if not all([TESTRAY_CLIENT_ID, TESTRAY_CLIENT_SECRET]):
     TESTRAY_CLIENT_ID = os.getenv("TESTRAY_CLIENT_ID")
     TESTRAY_CLIENT_SECRET = os.getenv("TESTRAY_CLIENT_SECRET")
 
+# Fail if still missing
+if not TESTRAY_CLIENT_ID or not TESTRAY_CLIENT_SECRET:
+    raise RuntimeError("Set TESTRAY_CLIENT_ID and TESTRAY_CLIENT_SECRET as environment variables, or add them to .automated_tasks.env in the project root.\n")
+
 TOKEN_URL = "https://testray.liferay.com/o/oauth2/token"
 
 SESSION_ID = os.getenv("SESSION_ID")
