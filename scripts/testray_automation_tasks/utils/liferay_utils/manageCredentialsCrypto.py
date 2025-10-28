@@ -81,8 +81,8 @@ def get_credentials():
       - First try GitHub Actions secrets (env variables JIRA_USER, JIRA_TOKEN)
       - If not present, fallback to ~/.jira_user encrypted storage
     """
-    env_user = os.getenv("USER")
-    env_token = os.getenv("TOKEN")
+    env_user = os.getenv("JIRA_USER")
+    env_token = os.getenv("JIRA_TOKEN")
 
     if env_user and env_token:
         # Running in GitHub Actions (or with exported envs locally)

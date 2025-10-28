@@ -24,10 +24,10 @@ jobs:
       - name: Install dependencies and run script
         working-directory: scripts/testray_automation_tasks
         env:
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          TOKEN: ${{ secrets.TOKEN }}
-          USER: ${{ secrets.USER }}
+          TESTRAY_CLIENT_ID: ${{ secrets.TESTRAY_CLIENT_ID }}
+          TESTRAY_CLIENT_SECRET: ${{ secrets.TESTRAY_CLIENT_SECRET }}
+          JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+          JIRA_USER: ${{ secrets.JIRA_USER }}
         run: |
           python -m venv .venv
           source .venv/bin/activate

@@ -11,16 +11,16 @@ from pathlib import Path
 # ------------------------ AUTH CONFIG ------------------------
 
 # Try to get from environment variables first
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+TESTRAY_CLIENT_ID = os.getenv("TESTRAY_CLIENT_ID")
+TESTRAY_CLIENT_SECRET = os.getenv("TESTRAY_CLIENT_SECRET")
 
 # If any are missing, load from local .env file (for local dev)
-if not all([CLIENT_ID, CLIENT_SECRET]):
+if not all([TESTRAY_CLIENT_ID, TESTRAY_CLIENT_SECRET]):
     env_path = Path(__file__).resolve().parents[6] / ".automated_tasks.env"
     load_dotenv(dotenv_path=env_path)
 
-    CLIENT_ID = os.getenv("CLIENT_ID")
-    CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+    TESTRAY_CLIENT_ID = os.getenv("TESTRAY_CLIENT_ID")
+    TESTRAY_CLIENT_SECRET = os.getenv("TESTRAY_CLIENT_SECRET")
 
 TOKEN_URL = "https://testray.liferay.com/o/oauth2/token"
 
@@ -39,7 +39,7 @@ def get_access_token():
     response = requests.post(
         TOKEN_URL,
         headers={
-            "Authorization": f"Basic {base64.b64encode(f'{CLIENT_ID}:{CLIENT_SECRET}'.encode()).decode()}",
+            "Authorization": f"Basic {base64.b64encode(f'{TESTRAY_CLIENT_ID}:{TESTRAY_CLIENT_SECRET}'.encode()).decode()}",
             "Content-Type": "application/x-www-form-urlencoded"
         },
         data={"grant_type": "client_credentials"},
