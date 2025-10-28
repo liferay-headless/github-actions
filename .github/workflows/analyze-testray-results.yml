@@ -1,11 +1,9 @@
-# .github/workflows/testray-automation-task.yml
-name: Run headless Testray script
+name: Analyze TestRay results
 
 on:
+  workflow_dispatch:
   schedule:
-    # Runs at 6 AM UTC every weekday (Monday–Friday)
     - cron: '0 6 * * 1-5'
-  workflow_dispatch:  # Allows manual trigger too
 
 jobs:
   run-testray:
@@ -13,15 +11,15 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4  # v4 is the latest as of 2025
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'  # speeds up installs by caching dependencies
+          cache: 'pip'
 
-      - name: Install dependencies and run script
+      - name: Analyze TestRay results
         working-directory: scripts/testray_automation_tasks
         env:
           TESTRAY_CLIENT_ID: ${{ secrets.TESTRAY_CLIENT_ID }}
