@@ -78,11 +78,11 @@ def generate_rsa_keypair(folder: Path):
 def get_credentials():
     """
     Hybrid mode:
-      - First try GitHub Actions secrets (env variables JIRA_USER, JIRA_TOKEN)
+      - First try GitHub Actions secrets (env variables JIRA_API_USER, JIRA_API_TOKEN)
       - If not present, fallback to ~/.jira_user encrypted storage
     """
-    env_user = os.getenv("JIRA_USER")
-    env_token = os.getenv("JIRA_TOKEN")
+    env_user = os.getenv("JIRA_API_USER")
+    env_token = os.getenv("JIRA_API_TOKEN")
 
     if env_user and env_token:
         # Running in GitHub Actions (or with exported envs locally)
