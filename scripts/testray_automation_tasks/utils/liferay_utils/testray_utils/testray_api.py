@@ -255,10 +255,11 @@ def get_case_count_by_type_in_build(build_id, case_type_id):
     page_size = 500
 
     while True:
-        url = (f"{BASE_URL}/builds/{build_id}/buildToCaseResult"
-               f"?filter=r_caseToCaseResult_c_case/r_caseTypeToCases_c_caseTypeId eq {case_type_id}"
-               f"&fields=r_caseToCaseResult_c_caseId"
-               f"&pageSize={page_size}&page={page}")
+        url = (
+            f"{BASE_URL}/builds/{build_id}/buildToCaseResult"
+            f"?nestedFields=r_caseToCaseResult_c_case"
+            f"&pageSize={page_size}&page={page}"
+        )
         data = get_json(url)
         items = data.get("items", [])
         all_items.extend(items)
@@ -267,8 +268,13 @@ def get_case_count_by_type_in_build(build_id, case_type_id):
             break
         page += 1
 
-    unique_case_ids = {item['r_caseToCaseResult_c_caseId'] for item in all_items if 'r_caseToCaseResult_c_caseId' in item}
-    return len(unique_case_ids)
+    matching_case_ids = {
+        item.get("r_caseToCaseResult_c_caseId")
+        for item in all_items
+        if item.get("r_caseToCaseResult_c_case", {}).get("r_caseTypeToCases_c_caseTypeId") == case_type_id
+    }
+
+    return len(matching_case_ids)
 
 @lru_cache(maxsize=None)
 def get_case_type_id_by_name(case_type_name):
