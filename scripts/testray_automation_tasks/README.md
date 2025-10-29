@@ -86,19 +86,9 @@ jira config
 
 ---
 
-## 📦 Clone the Repository
-
-Clone this repo into your preferred working directory:
-
-```bash
-gh repo clone magjed4289/TestrayAutomatedTasks
-```
-
----
-
 ## ⚙️ Configure Environment Variables
 
-1. Move the `.automated_tasks.env` file **outside** and **at the same level as** the `TestrayAutomatedTasks` directory.
+1. Move the `.automated_tasks.env` file **outside** and **at the same level as** the **github-actions** repo.
 
 2. Edit `.automated_tasks.env` and fill in the required variables.
 
@@ -106,7 +96,7 @@ gh repo clone magjed4289/TestrayAutomatedTasks
 
 ```
 your-workspace/
-├── TestrayAutomatedTasks/
+├── github-actions/
 └── .automated_tasks.env
 ```
 
@@ -147,38 +137,20 @@ your-workspace/
 
 ---
 
-## 📥 Install Python Dependencies
-
-From the root of the `TestrayAutomatedTasks` directory:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## ▶️ How to Use
-
-Run the script from the correct subdirectory:
-
-```bash
-cd /your/path/to/repo/TestrayAutomatedTasks/liferay/teams/headless
-python3 headless_testray.py
-```
-
----
-
-## 🧠 Optional: Add an Alias for Convenience and Create a Virtual Environment
+## 🧠 Add an Alias for Convenience and Create a Virtual Environment
 
 To avoid typing the full path every time, you can add an alias in your `.bashrc` or `.zshrc`:
 
 ```bash
-alias rta='cd /your/path/to/TestrayAutomatedTasks && \
-[ -d ".venv" ] || python3 -m venv .venv && \
-source .venv/bin/activate && \
-pip install -r requirements.txt && \
-cd liferay/teams/headless && \
-python3 headless_testray.py'
+export GITHUB_ACTIONS_HOME=~/dev/projects/github-actions  # change path if needed
+
+alias rta='cd "$GITHUB_ACTIONS_HOME/scripts/testray_automation_tasks" && \
+  [ -d ".venv" ] || python3 -m venv .venv && \
+  source .venv/bin/activate && \
+  pip install -r requirements.txt && \
+  cd "$GITHUB_ACTIONS_HOME/scripts/testray_automation_tasks/liferay/teams/headless" && \
+  python3 headless_testray.py'
+  
 ```
 
 After saving, apply the changes:
