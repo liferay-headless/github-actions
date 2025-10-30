@@ -45,7 +45,7 @@ def analyze_testflow(builds):
     if not latest_build:
         return
 
-    task_id, latest_build_id = _prepare_task(builds, latest_build)
+    task_id, latest_build_id = _prepare_task(latest_build)
     if not task_id:
         print("✘ Could not find or create a valid task, exiting.")
         return
@@ -128,7 +128,7 @@ def _get_latest_done_build(builds):
     return latest_build
 
 
-def _prepare_task(builds, latest_build):
+def _prepare_task(latest_build):
     """
     Ensure a task exists for latest_build and is actionable.
     Returns (task_id or None, latest_build_id).
