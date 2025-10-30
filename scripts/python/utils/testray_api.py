@@ -28,39 +28,32 @@ def get_access_token():
     return response.json()["access_token"]
 
 
-ACCESS_TOKEN = get_access_token()
-
-HEADERS = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Accept": "application/json"}
-
 # Status filters
 STATUS_FAILED_BLOCKED_TESTFIX = "FAILED,TESTFIX,BLOCKED"
 
 # ============================ HTTP HELPERS ============================
 
 
+@lru_cache()
+def get_headers():
+    return {
+        "Authorization": f"Bearer {get_access_token()}",
+        "Accept": "application/json",
+    }
+
+
 def get_json(url):
-    """Send GET request and return JSON response. Refresh token if 401."""
-    global ACCESS_TOKEN, HEADERS  # so we can update them
-
-    response = requests.get(url, headers=HEADERS)
-
-    if response.status_code == 401:
-        # refresh token
-        ACCESS_TOKEN = get_access_token()
-        HEADERS = {
-            "Authorization": f"Bearer {ACCESS_TOKEN}",
-            "Accept": "application/json",
-        }
-        response = requests.get(url, headers=HEADERS)
-
+    """Send GET request and return JSON response."""
+    response = requests.get(url, headers=get_headers())
     response.raise_for_status()
     return response.json()
 
 
 def put_json(url, payload):
     """Send PUT request with JSON payload."""
-    headers = {**HEADERS, "Content-Type": "application/json"}
-    response = requests.put(url, json=payload, headers=headers)
+    response = requests.put(
+        url, json=payload, headers={**get_headers(), "Content-Type": "application/json"}
+    )
     response.raise_for_status()
     return response.json()
 
@@ -80,7 +73,7 @@ def assign_issue_to_case_result_batch(batch_updates):
 def autofill_build(testray_build_id_1, testray_build_id_2):
     """Trigger autofill between two Testray builds."""
     url = f"{TESTRAY_REST_URL}/testray-build-autofill/{testray_build_id_1}/{testray_build_id_2}"
-    response = requests.post(url, headers=HEADERS, data="")
+    response = requests.post(url, headers=get_headers(), data="")
     response.raise_for_status()
     return response.json()
 
@@ -88,8 +81,9 @@ def autofill_build(testray_build_id_1, testray_build_id_2):
 def complete_task(task_id):
     url = f"{BASE_URL}/tasks/{task_id}"
     payload = {"dueStatus": {"key": "COMPLETE", "name": "Complete"}}
-    headers = {**HEADERS, "Content-Type": "application/json"}
-    response = requests.patch(url, json=payload, headers=headers)
+    response = requests.patch(
+        url, json=payload, headers={**get_headers(), "Content-Type": "application/json"}
+    )
     response.raise_for_status()
     return response.json()
 
@@ -101,8 +95,11 @@ def create_task(build):
         "r_buildToTasks_c_buildId": build["id"],
         "dueStatus": {"key": "INANALYSIS", "name": "In Analysis"},
     }
-    headers = {**HEADERS, "Content-Type": "application/json"}
-    response = requests.post(f"{BASE_URL}/tasks/", json=payload, headers=headers)
+    response = requests.post(
+        f"{BASE_URL}/tasks/",
+        json=payload,
+        headers={**get_headers(), "Content-Type": "application/json"},
+    )
     response.raise_for_status()
     return response.json()
 
@@ -110,7 +107,7 @@ def create_task(build):
 def create_testflow(task_id):
     """Create testflow for a task."""
     url = f"{TESTRAY_REST_URL}/testray-testflow/{task_id}"
-    response = requests.post(url, headers=HEADERS, data="")
+    response = requests.post(url, headers=get_headers(), data="")
     response.raise_for_status()
     return response.json()
 
