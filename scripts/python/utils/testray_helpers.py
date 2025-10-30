@@ -34,25 +34,6 @@ from utils.testray_api import (
 )
 
 
-class ComponentMapping:
-    TestrayToJira = {
-        "API Builder": "API Builder",
-        "Connectors": "Data Integration > Connectors",
-        "Data Migration Center": "Data Integration > Data Migration Center",
-        "Export/Import": "Data Integration > Export/Import",
-        "Headless Batch Engine API": "Headless Batch Engine API",
-        "Headless Discovery Application": "Headless Discovery Application",
-        "Job Scheduler": "Data Integration > Job Scheduler",
-        "Object": "Objects > Object Entries REST APIs",
-        "Object Entries REST APIs": "Objects > Object Entries REST APIs",
-        "REST Builder": "REST Builder",
-        "REST Infrastructure": "REST Infrastructure",
-        "Site Templates": "Content Publishing > Site Templates",
-        "Staging": "Data Integration > Staging",
-        "Upgrades Staging": "Data Integration > Staging",  # Assuming same as 'Staging'
-    }
-
-
 # ---------------------------------------------------------------------------
 # Entry-point orchestration helpers
 # ---------------------------------------------------------------------------
@@ -950,7 +931,22 @@ def create_investigation_task_for_subtask(
     summary = f"Investigate {first_error}..."
     description = "\n".join(description_lines)
     jira_components = [
-        ComponentMapping.TestrayToJira.get(c, c)  # fallback to original if not mapped
+        {
+            "API Builder": "API Builder",
+            "Connectors": "Data Integration > Connectors",
+            "Data Migration Center": "Data Integration > Data Migration Center",
+            "Export/Import": "Data Integration > Export/Import",
+            "Headless Batch Engine API": "Headless Batch Engine API",
+            "Headless Discovery Application": "Headless Discovery Application",
+            "Job Scheduler": "Data Integration > Job Scheduler",
+            "Object": "Objects > Object Entries REST APIs",
+            "Object Entries REST APIs": "Objects > Object Entries REST APIs",
+            "REST Builder": "REST Builder",
+            "REST Infrastructure": "REST Infrastructure",
+            "Site Templates": "Content Publishing > Site Templates",
+            "Staging": "Data Integration > Staging",
+            "Upgrades Staging": "Data Integration > Staging",  # Assuming same as 'Staging'
+        }.get(c, c)
         for c in (component_name or "Unknown").split(",")
     ]
 
