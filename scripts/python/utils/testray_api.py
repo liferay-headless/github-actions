@@ -9,7 +9,14 @@ TESTRAY_REST_URL = "https://testray.liferay.com/o/testray-rest/v1.0"
 HEADLESS_ROUTINE_ID = 994140
 
 
-def get_access_token():
+# Status filters
+STATUS_FAILED_BLOCKED_TESTFIX = "FAILED,TESTFIX,BLOCKED"
+
+# ============================ HTTP HELPERS ============================
+
+
+@lru_cache()
+def get_headers():
     TESTRAY_CLIENT_ID = os.getenv("TESTRAY_CLIENT_ID") or (_ for _ in ()).throw(
         EnvironmentError("TESTRAY_CLIENT_ID environment variable is not set.")
     )
@@ -25,19 +32,8 @@ def get_access_token():
         data={"grant_type": "client_credentials"},
     )
     response.raise_for_status()
-    return response.json()["access_token"]
-
-
-# Status filters
-STATUS_FAILED_BLOCKED_TESTFIX = "FAILED,TESTFIX,BLOCKED"
-
-# ============================ HTTP HELPERS ============================
-
-
-@lru_cache()
-def get_headers():
     return {
-        "Authorization": f"Bearer {get_access_token()}",
+        "Authorization": f"Bearer {response.json()['access_token']}",
         "Accept": "application/json",
     }
 
