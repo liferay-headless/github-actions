@@ -4,7 +4,6 @@ from datetime import datetime, time
 from sentence_transformers import SentenceTransformer, util
 from functools import lru_cache
 from utils.jira_helpers import (
-    get_jira_connection,
     get_issue_status_by_key,
     create_jira_task,
     get_all_issues,
@@ -46,27 +45,23 @@ def analyze_testflow(builds):
     if not latest_build:
         return
 
-    jira_connection = get_jira_connection()
-
-    task_id, latest_build_id = _prepare_task(jira_connection, builds, latest_build)
+    task_id, latest_build_id = _prepare_task(builds, latest_build)
     if not task_id:
         print("✘ Could not find or create a valid task, exiting.")
         return
 
-    epic = _find_testing_epic(jira_connection)
+    epic = _find_testing_epic()
     _maybe_autofill_from_previous(builds, latest_build)
 
     batch_updates, subtasks_to_complete, subtask_to_issues = _process_task_subtasks(
         task_id=task_id,
         latest_build_id=latest_build_id,
-        jira_connection=jira_connection,
         epic=epic,
     )
 
     _finalize_task_completion(
         task_id=task_id,
         latest_build_id=latest_build_id,
-        jira_connection=jira_connection,
         subtasks_to_complete=subtasks_to_complete,
         subtask_to_issues=subtask_to_issues,
         batch_updates=batch_updates,
@@ -133,7 +128,7 @@ def _get_latest_done_build(builds):
     return latest_build
 
 
-def _prepare_task(jira_connection, builds, latest_build):
+def _prepare_task(builds, latest_build):
     """
     Ensure a task exists for latest_build and is actionable.
     Returns (task_id or None, latest_build_id).
@@ -208,9 +203,9 @@ def _parse_execution_date(date_str):
     return None
 
 
-def _find_testing_epic(jira_connection):
+def _find_testing_epic():
     jql = _headless_epic_jql()
-    related_epics = get_all_issues(jira_connection, jql, fields=["summary", "key"])
+    related_epics = get_all_issues(jql, fields=["summary", "key"])
     print(f"✔ Retrieved {len(related_epics)} related Epics from JIRA")
 
     epic = related_epics[0] if len(related_epics) == 1 else None
@@ -241,7 +236,7 @@ def _maybe_autofill_from_previous(builds, latest_build):
         print("✔ Completed")
 
 
-def _process_task_subtasks(*, task_id, latest_build_id, jira_connection, epic):
+def _process_task_subtasks(*, task_id, latest_build_id, epic):
     """
     Iterate subtasks, detect unique failures grouped by error, reuse or create Jira tasks,
     and build batched updates and completion list.
@@ -280,7 +275,6 @@ def _process_task_subtasks(*, task_id, latest_build_id, jira_connection, epic):
         resolved_all_groups = True
         for error_key, group in groups.items():
             updates, issues_str, resolved = _resolve_unique_failures(
-                jira_connection=jira_connection,
                 epic=epic,
                 latest_build_id=latest_build_id,
                 task_id=task_id,
@@ -307,7 +301,6 @@ def _finalize_task_completion(
     *,
     task_id,
     latest_build_id,
-    jira_connection,
     subtasks_to_complete,
     subtask_to_issues,
     batch_updates,
@@ -335,7 +328,7 @@ def _finalize_task_completion(
 
     # Close stale open routine tasks in Jira that were not reproduced in this run
     seen_issue_keys = _collect_issue_keys_from_subtasks(subtasks)
-    _close_stale_routine_tasks(jira_connection, latest_build_id, seen_issue_keys)
+    _close_stale_routine_tasks(latest_build_id, seen_issue_keys)
 
     print(f"✔ All subtasks are complete, completing task {task_id}")
     complete_task(task_id)
@@ -408,7 +401,7 @@ def _group_failures_by_error(unique_failures):
 
 
 def _resolve_unique_failures(
-    *, jira_connection, epic, latest_build_id, task_id, subtask_id, unique_failures
+    *, epic, latest_build_id, task_id, subtask_id, unique_failures
 ):
     """
     Try to reuse similar open Jira issues; otherwise create an investigation.
@@ -420,7 +413,6 @@ def _resolve_unique_failures(
     # Reuse existing open issue(s) if the error is similar (lookup by the first item in this group)
     probe = unique_failures[0]
     has_similar_issue, blocked_dict = _find_similar_open_issues(
-        jira_connection,
         probe["case_id"],
         probe["error"],
     )
@@ -441,7 +433,6 @@ def _resolve_unique_failures(
         subtask_unique_failures=unique_failures,
         subtask_id=subtask_id,
         latest_build_id=latest_build_id,
-        jira_connection=jira_connection,
         epic=epic,
         task_id=task_id,
         case_history_cache={},
@@ -504,12 +495,12 @@ def _collect_result_issue_keys(results):
     }
 
 
-def _close_stale_routine_tasks(jira_connection, latest_build_id, seen_issue_keys):
+def _close_stale_routine_tasks(latest_build_id, seen_issue_keys):
     """
     Close open 'hl_routine_tasks' that did not appear in this run (not reproducible).
     """
     jql = "labels in ('hl_routine_tasks') AND labels not in ('test_fix') AND status = Open"
-    open_jira_issues = get_all_issues(jira_connection, jql, fields=["key"])
+    open_jira_issues = get_all_issues(jql, fields=["key"])
     open_keys = {issue.key for issue in open_jira_issues}
     to_close = open_keys - seen_issue_keys
     if to_close:
@@ -518,7 +509,7 @@ def _close_stale_routine_tasks(jira_connection, latest_build_id, seen_issue_keys
             f"ℹ Found {len(to_close)} issues to close as they are not reproducible in this run."
         )
         for issue_key in to_close:
-            close_issue(jira_connection, issue_key, build_hash)
+            close_issue(issue_key, build_hash)
 
 
 def _sort_cases_by_duration(subtask_case_pairs, case_duration_lookup):
@@ -702,9 +693,7 @@ def _should_skip_result(error):
     return any(keyword in (error or "") for keyword in skip_error_keywords)
 
 
-def _find_similar_open_issues(
-    jira_connection, case_id, result_error, *, return_list=False
-):
+def _find_similar_open_issues(case_id, result_error, *, return_list=False):
     """
     Look for similar errors in history that have open Jira issues.
 
@@ -730,7 +719,7 @@ def _find_similar_open_issues(
             if issue_key in seen_issues:
                 continue
             try:
-                _, status = get_issue_status_by_key(jira_connection, issue_key)
+                _, status = get_issue_status_by_key(issue_key)
                 if status != "Closed":
                     open_issues.append(issue_key)
                 seen_issues.add(issue_key)
@@ -884,7 +873,6 @@ def _create_investigation_task_for_subtask(
     subtask_unique_failures,
     subtask_id,
     latest_build_id,
-    jira_connection,
     epic,
     task_id,
     case_history_cache,
@@ -968,7 +956,6 @@ def _create_investigation_task_for_subtask(
 
     # Create Jira issue
     issue = create_jira_task(
-        jira_local=jira_connection,
         epic=epic,
         summary=summary,
         description=description,
