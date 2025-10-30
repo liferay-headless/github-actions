@@ -70,49 +70,6 @@ def close_issue(jira_local, issue_key, build_hash):
         print(f"✘ Failed to process issue {issue_key}: {e}")
 
 
-def _transition_to_closed(jira_local, issue_key, build_hash):
-    """
-    Closes a single sub-task (directly to 'Closed' with 'Discarded').
-    """
-    try:
-        transitions = jira_local.transitions(issue_key)
-        close_transition = next((t for t in transitions if t["name"] == "Closed"), None)
-
-        if close_transition:
-            jira_local.transition_issue(
-                issue_key,
-                transition=close_transition["id"],
-                resolution={"name": "Discarded"},
-            )
-            jira_local.add_comment(
-                issue_key,
-                f"Closing sub-task. Not reproducible in current SHA {build_hash}",
-            )
-            print(f"✔ {issue_key} → 'Closed' with 'Discarded'")
-        else:
-            print(f"✘ Could not find 'Closed' transition for sub-task {issue_key}")
-
-    except Exception as e:
-        print(f"✘ Failed to close sub-task {issue_key}: {e}")
-
-
-def create_investigation_task_for(
-    jira_local, summary, description, component, environment
-):
-    issue_dict = {
-        "project": {"key": "LPD"},
-        "summary": summary,
-        "description": description,
-        "issuetype": {"name": "Task"},
-        "components": [{"name": component}],
-        "labels": ["hl_routine_tasks"],
-        "customfield_environment": environment,
-    }
-    new_issue = jira_local.create_issue(fields=issue_dict)
-    print(f"Created new investigation task: {new_issue.key}")
-    return new_issue
-
-
 def create_jira_task(jira_local, epic, summary, description, component, label):
     """
     Creates a Jira investigation task for unique failures.
@@ -189,3 +146,29 @@ def get_issue_status_by_key(jira_local, issue_key):
     except Exception as e:
         print(f"Error retrieving issue {issue_key}: {str(e)}")
         return None, None
+
+
+def _transition_to_closed(jira_local, issue_key, build_hash):
+    """
+    Closes a single sub-task (directly to 'Closed' with 'Discarded').
+    """
+    try:
+        transitions = jira_local.transitions(issue_key)
+        close_transition = next((t for t in transitions if t["name"] == "Closed"), None)
+
+        if close_transition:
+            jira_local.transition_issue(
+                issue_key,
+                transition=close_transition["id"],
+                resolution={"name": "Discarded"},
+            )
+            jira_local.add_comment(
+                issue_key,
+                f"Closing sub-task. Not reproducible in current SHA {build_hash}",
+            )
+            print(f"✔ {issue_key} → 'Closed' with 'Discarded'")
+        else:
+            print(f"✘ Could not find 'Closed' transition for sub-task {issue_key}")
+
+    except Exception as e:
+        print(f"✘ Failed to close sub-task {issue_key}: {e}")

@@ -10,58 +10,19 @@ HEADLESS_ROUTINE_ID = 994140
 STATUS_FAILED_BLOCKED_TESTFIX = "FAILED,TESTFIX,BLOCKED"
 
 
-@lru_cache()
-def get_headers():
-    TESTRAY_CLIENT_ID = os.getenv("TESTRAY_CLIENT_ID") or (_ for _ in ()).throw(
-        EnvironmentError("TESTRAY_CLIENT_ID environment variable is not set.")
-    )
-    TESTRAY_CLIENT_SECRET = os.getenv("TESTRAY_CLIENT_SECRET") or (_ for _ in ()).throw(
-        EnvironmentError("TESTRAY_CLIENT_SECRET environment variable is not set.")
-    )
-    response = requests.post(
-        "https://testray.liferay.com/o/oauth2/token",
-        headers={
-            "Authorization": f"Basic {base64.b64encode(f'{TESTRAY_CLIENT_ID}:{TESTRAY_CLIENT_SECRET}'.encode()).decode()}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        data={"grant_type": "client_credentials"},
-    )
-    response.raise_for_status()
-    return {
-        "Authorization": f"Bearer {response.json()['access_token']}",
-        "Accept": "application/json",
-    }
-
-
-def get_json(url):
-    """Send GET request and return JSON response."""
-    response = requests.get(url, headers=get_headers())
-    response.raise_for_status()
-    return response.json()
-
-
-def put_json(url, payload):
-    """Send PUT request with JSON payload."""
-    response = requests.put(
-        url, json=payload, headers={**get_headers(), "Content-Type": "application/json"}
-    )
-    response.raise_for_status()
-    return response.json()
-
-
 def assign_issue_to_case_result_batch(batch_updates):
     """Update a batch of case results with issues and due statuses."""
     for item in batch_updates:
         case_result_id = item["id"]
         payload = {"dueStatus": item["dueStatus"], "issues": item["issues"]}
         url = f"{BASE_URL}/caseresults/{case_result_id}"
-        put_json(url, payload)
+        _put_json(url, payload)
 
 
 def autofill_build(testray_build_id_1, testray_build_id_2):
     """Trigger autofill between two Testray builds."""
     url = f"{TESTRAY_REST_URL}/testray-build-autofill/{testray_build_id_1}/{testray_build_id_2}"
-    response = requests.post(url, headers=get_headers(), data="")
+    response = requests.post(url, headers=_get_headers(), data="")
     response.raise_for_status()
     return response.json()
 
@@ -70,7 +31,9 @@ def complete_task(task_id):
     url = f"{BASE_URL}/tasks/{task_id}"
     payload = {"dueStatus": {"key": "COMPLETE", "name": "Complete"}}
     response = requests.patch(
-        url, json=payload, headers={**get_headers(), "Content-Type": "application/json"}
+        url,
+        json=payload,
+        headers={**_get_headers(), "Content-Type": "application/json"},
     )
     response.raise_for_status()
     return response.json()
@@ -86,7 +49,7 @@ def create_task(build):
     response = requests.post(
         f"{BASE_URL}/tasks/",
         json=payload,
-        headers={**get_headers(), "Content-Type": "application/json"},
+        headers={**_get_headers(), "Content-Type": "application/json"},
     )
     response.raise_for_status()
     return response.json()
@@ -95,7 +58,7 @@ def create_task(build):
 def create_testflow(task_id):
     """Create testflow for a task."""
     url = f"{TESTRAY_REST_URL}/testray-testflow/{task_id}"
-    response = requests.post(url, headers=get_headers(), data="")
+    response = requests.post(url, headers=_get_headers(), data="")
     response.raise_for_status()
     return response.json()
 
@@ -112,7 +75,7 @@ def fetch_case_results(case_id, routine_id, status=None, page_size=500):
             + f"&page={page}&pageSize={page_size}"
         )
         url = f"{base_url}?{params}"
-        result = get_json(url)
+        result = _get_json(url)
         items = result.get("items", [])
         all_items.extend(items)
 
@@ -130,7 +93,7 @@ def get_all_build_case_results(build_id):
 
     while True:
         url = f"{BASE_URL}/builds/{build_id}/buildToCaseResult?pageSize=500&page={page}"
-        data = get_json(url)
+        data = _get_json(url)
         items = data.get("items", [])
         all_items.extend(items)
 
@@ -145,25 +108,25 @@ def get_all_build_case_results(build_id):
 def get_build_info(build_id):
     """Get build metadata, including routine ID and due date."""
     url = f"{BASE_URL}/builds/{build_id}?fields=dueDate,gitHash,name,id,importStatus,r_routineToBuilds_c_routineId&nestedFields=buildToTasks"
-    return get_json(url)
+    return _get_json(url)
 
 
 def get_build_tasks(build_id):
     """Get tasks associated with a build."""
     url = f"{BASE_URL}/builds/{build_id}/buildToTasks?fields=id,dueStatus"
-    return get_json(url).get("items", [])
+    return _get_json(url).get("items", [])
 
 
 @lru_cache(maxsize=None)
 def get_case_info(case_id):
     """Get the name and priority of a test case."""
     url = f"{BASE_URL}/cases/{case_id}"
-    return get_json(url)
+    return _get_json(url)
 
 
 def get_case_result(case_result_id):
     url = f"{BASE_URL}/caseresults/{case_result_id}"
-    return get_json(url)
+    return _get_json(url)
 
 
 def get_case_count_by_type_in_build(build_id, case_type_id):
@@ -180,7 +143,7 @@ def get_case_count_by_type_in_build(build_id, case_type_id):
             f"{BASE_URL}/builds/{build_id}/buildToCaseResult"
             f"?nestedFields=r_caseToCaseResult_c_case&pageSize={page_size}&page={page}"
         )
-        data = get_json(url)
+        data = _get_json(url)
         items = data.get("items", [])
         all_items.extend(items)
 
@@ -204,7 +167,7 @@ def get_case_count_by_type_in_build(build_id, case_type_id):
 def get_case_type_id_by_name(case_type_name):
     """Get the ID of a case type by its name."""
     url = f"{BASE_URL}/casetypes?filter=name eq '{case_type_name}'&fields=id"
-    result = get_json(url)
+    result = _get_json(url)
     items = result.get("items", [])
     if items:
         return items[0].get("id")
@@ -215,39 +178,39 @@ def get_case_type_id_by_name(case_type_name):
 def get_case_type_name(case_type_id):
     """Get name of a case type by ID."""
     url = f"{BASE_URL}/casetypes/{case_type_id}?fields=name"
-    return get_json(url).get("name", "Unknown")
+    return _get_json(url).get("name", "Unknown")
 
 
 @lru_cache(maxsize=None)
 def get_component_name(component_id):
     """Get name of a component by ID."""
     url = f"{BASE_URL}/components/{component_id}?fields=name"
-    return get_json(url).get("name", "Unknown")
+    return _get_json(url).get("name", "Unknown")
 
 
 def get_routine_to_builds():
     """Fetch all builds for a routine, remove pagination and sort by dateCreated descending."""
     url = f"{BASE_URL}/routines/{HEADLESS_ROUTINE_ID}/routineToBuilds?fields=dueDate,name,id,importStatus,r_routineToBuilds_c_routineId,dateCreated&pageSize=-1"
-    items = get_json(url).get("items", [])
+    items = _get_json(url).get("items", [])
     return sorted(items, key=lambda b: b.get("dateCreated", ""), reverse=True)
 
 
 def get_subtask_case_results(subtask_id):
     """Get case results under a subtask."""
     url = f"{BASE_URL}/subtasks/{subtask_id}/subtaskToCaseResults?fields=id,executionDate,errors,issues,r_caseToCaseResult_c_caseId,r_componentToCaseResult_c_componentId&pageSize=-1"
-    return get_json(url).get("items", [])
+    return _get_json(url).get("items", [])
 
 
 def get_task_status(task_id):
     """Get the status of a task."""
     url = f"{BASE_URL}/tasks/{task_id}?fields=dueStatus"
-    return get_json(url)
+    return _get_json(url)
 
 
 def get_task_subtasks(task_id):
     """Get subtasks associated with a task."""
     url = f"{BASE_URL}/tasks/{task_id}/taskToSubtasks?pageSize=-1"
-    return get_json(url).get("items", [])
+    return _get_json(url).get("items", [])
 
 
 def update_subtask_status(subtask_id: str, issues: Optional[str] = None) -> None:
@@ -256,5 +219,46 @@ def update_subtask_status(subtask_id: str, issues: Optional[str] = None) -> None
     payload = {"dueStatus": {"key": "COMPLETE", "name": "Complete"}}
     if issues:
         payload["issues"] = issues
-    put_json(url, payload)
+    _put_json(url, payload)
     print(f"Subtask {subtask_id} marked as COMPLETE.")
+
+
+def _get_json(url):
+    """Send GET request and return JSON response."""
+    response = requests.get(url, headers=_get_headers())
+    response.raise_for_status()
+    return response.json()
+
+
+def _put_json(url, payload):
+    """Send PUT request with JSON payload."""
+    response = requests.put(
+        url,
+        json=payload,
+        headers={**_get_headers(), "Content-Type": "application/json"},
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+@lru_cache()
+def _get_headers():
+    TESTRAY_CLIENT_ID = os.getenv("TESTRAY_CLIENT_ID") or (_ for _ in ()).throw(
+        EnvironmentError("TESTRAY_CLIENT_ID environment variable is not set.")
+    )
+    TESTRAY_CLIENT_SECRET = os.getenv("TESTRAY_CLIENT_SECRET") or (_ for _ in ()).throw(
+        EnvironmentError("TESTRAY_CLIENT_SECRET environment variable is not set.")
+    )
+    response = requests.post(
+        "https://testray.liferay.com/o/oauth2/token",
+        headers={
+            "Authorization": f"Basic {base64.b64encode(f'{TESTRAY_CLIENT_ID}:{TESTRAY_CLIENT_SECRET}'.encode()).decode()}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data={"grant_type": "client_credentials"},
+    )
+    response.raise_for_status()
+    return {
+        "Authorization": f"Bearer {response.json()['access_token']}",
+        "Accept": "application/json",
+    }

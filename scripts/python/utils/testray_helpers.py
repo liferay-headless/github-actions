@@ -34,7 +34,95 @@ from utils.testray_api import (
 )
 
 
-def get_latest_done_build(builds):
+def analyze_testflow(builds):
+    """
+    Slim orchestration:
+      1) find latest DONE build + ensure task exists
+      2) fetch testing epic + maybe autofill from previous completed task
+      3) process subtasks & results (collect updates only)
+      4) apply updates and attempt task completion/cleanup
+    """
+    latest_build = _get_latest_done_build(builds)
+    if not latest_build:
+        return
+
+    jira_connection = get_jira_connection()
+
+    task_id, latest_build_id = _prepare_task(jira_connection, builds, latest_build)
+    if not task_id:
+        print("✘ Could not find or create a valid task, exiting.")
+        return
+
+    epic = _find_testing_epic(jira_connection)
+    _maybe_autofill_from_previous(builds, latest_build)
+
+    batch_updates, subtasks_to_complete, subtask_to_issues = _process_task_subtasks(
+        task_id=task_id,
+        latest_build_id=latest_build_id,
+        jira_connection=jira_connection,
+        epic=epic,
+    )
+
+    _finalize_task_completion(
+        task_id=task_id,
+        latest_build_id=latest_build_id,
+        jira_connection=jira_connection,
+        subtasks_to_complete=subtasks_to_complete,
+        subtask_to_issues=subtask_to_issues,
+        batch_updates=batch_updates,
+    )
+
+
+def report_aft_ratio_for_latest(builds):
+    """
+    Compute and print AFT ratio KPI for latest DONE build vs beginning of quarter.
+    (Same behavior as your previous get_automated_functional_tests_ratio flow, centralized here.)
+    """
+    latest_build = _get_latest_done_build(builds)
+    if not latest_build:
+        return
+
+    # Beginning-of-quarter build discovery
+    quarter_start_date, _, _ = _get_current_quarter_info()
+    quarter_start = datetime.combine(quarter_start_date, time.min)
+
+    best_build = None
+    best_delta = None
+    for b in builds:
+        due_str = b.get("dueDate")
+        if not due_str:
+            continue
+        dt = _parse_execution_date(due_str)
+        if not dt or dt < quarter_start:
+            continue
+        delta = dt - quarter_start
+        if best_delta is None or delta < best_delta:
+            best_delta = delta
+            best_build = b
+
+    if not best_build:
+        print(
+            "✘ Could not find a build from the beginning of the quarter to calculate test ratio."
+        )
+        return
+
+    latest_build_id = latest_build["id"]
+    aft_case_type_id = get_case_type_id_by_name("Automated Functional Test")
+    if not aft_case_type_id:
+        print("✘ Could not find case type ID for 'Automated Functional Test'.")
+        return
+
+    print("⏳ Calculating automated functional test counts...")
+    start_of_quarter_count = get_case_count_by_type_in_build(
+        best_build["id"], aft_case_type_id
+    )
+    current_count = get_case_count_by_type_in_build(latest_build_id, aft_case_type_id)
+    print("✔ Counts calculated.")
+
+    _report_poshi_tests_decrease(start_of_quarter_count, current_count)
+
+
+def _get_latest_done_build(builds):
     """Return the newest build only if its import status is DONE; else None."""
     if not builds:
         return None
@@ -45,7 +133,7 @@ def get_latest_done_build(builds):
     return latest_build
 
 
-def prepare_task(jira_connection, builds, latest_build):
+def _prepare_task(jira_connection, builds, latest_build):
     """
     Ensure a task exists for latest_build and is actionable.
     Returns (task_id or None, latest_build_id).
@@ -85,14 +173,14 @@ def prepare_task(jira_connection, builds, latest_build):
 
 
 def _headless_epic_jql():
-    _, quarter_number, year = get_current_quarter_info()
+    _, quarter_number, year = _get_current_quarter_info()
     return (
         f"text ~ '{year} Milestone {quarter_number} \\\\| Testing activities \\\\[Headless\\\\]' "
         f"and type = Epic and project='PUBLIC - Liferay Product Delivery' and status != Closed"
     )
 
 
-def normalize_error(error):
+def _normalize_error(error):
     """Normalize and clean error messages for comparison and pattern matching."""
     if not error:
         return ""
@@ -109,7 +197,7 @@ def normalize_error(error):
     return error
 
 
-def parse_execution_date(date_str):
+def _parse_execution_date(date_str):
     date_str = date_str.strip().rstrip("Z").replace("T", " ")
 
     for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
@@ -120,7 +208,7 @@ def parse_execution_date(date_str):
     return None
 
 
-def find_testing_epic(jira_connection):
+def _find_testing_epic(jira_connection):
     jql = _headless_epic_jql()
     related_epics = get_all_issues(jira_connection, jql, fields=["summary", "key"])
     print(f"✔ Retrieved {len(related_epics)} related Epics from JIRA")
@@ -134,7 +222,7 @@ def find_testing_epic(jira_connection):
     return epic
 
 
-def maybe_autofill_from_previous(builds, latest_build):
+def _maybe_autofill_from_previous(builds, latest_build):
     """
     If some previous build has a COMPLETED task, autofill into the latest build.
     """
@@ -153,7 +241,7 @@ def maybe_autofill_from_previous(builds, latest_build):
         print("✔ Completed")
 
 
-def process_task_subtasks(*, task_id, latest_build_id, jira_connection, epic):
+def _process_task_subtasks(*, task_id, latest_build_id, jira_connection, epic):
     """
     Iterate subtasks, detect unique failures grouped by error, reuse or create Jira tasks,
     and build batched updates and completion list.
@@ -215,7 +303,7 @@ def process_task_subtasks(*, task_id, latest_build_id, jira_connection, epic):
     return batch_updates, subtasks_to_complete, subtask_to_issues
 
 
-def finalize_task_completion(
+def _finalize_task_completion(
     *,
     task_id,
     latest_build_id,
@@ -283,7 +371,7 @@ def _scan_unique_failures(subtask_id, results):
         error = r.get("errors") or ""
 
         # First result can short-circuit the subtask
-        if first_result and should_skip_result(error):
+        if first_result and _should_skip_result(error):
             update_subtask_status(subtask_id)
             first_result_skipped = True
             first_result = False
@@ -292,7 +380,7 @@ def _scan_unique_failures(subtask_id, results):
         first_result = False
 
         # Already handled or globally skippable
-        if r.get("issues") or should_skip_result(error):
+        if r.get("issues") or _should_skip_result(error):
             continue
 
         # Consider as unique failure (unhandled)
@@ -315,7 +403,7 @@ def _group_failures_by_error(unique_failures):
     """
     groups = defaultdict(list)
     for f in unique_failures:
-        groups[normalize_error(f["error"])].append(f)
+        groups[_normalize_error(f["error"])].append(f)
     return groups
 
 
@@ -331,7 +419,7 @@ def _resolve_unique_failures(
 
     # Reuse existing open issue(s) if the error is similar (lookup by the first item in this group)
     probe = unique_failures[0]
-    has_similar_issue, blocked_dict = find_similar_open_issues(
+    has_similar_issue, blocked_dict = _find_similar_open_issues(
         jira_connection,
         probe["case_id"],
         probe["error"],
@@ -349,7 +437,7 @@ def _resolve_unique_failures(
     print(
         f"No similar issue found → create new investigation task for subtask {subtask_id}"
     )
-    issue = create_investigation_task_for_subtask(
+    issue = _create_investigation_task_for_subtask(
         subtask_unique_failures=unique_failures,
         subtask_id=subtask_id,
         latest_build_id=latest_build_id,
@@ -425,7 +513,7 @@ def _close_stale_routine_tasks(jira_connection, latest_build_id, seen_issue_keys
     open_keys = {issue.key for issue in open_jira_issues}
     to_close = open_keys - seen_issue_keys
     if to_close:
-        build_hash = get_current_build_hash(latest_build_id)
+        build_hash = _get_current_build_hash(latest_build_id)
         print(
             f"ℹ Found {len(to_close)} issues to close as they are not reproducible in this run."
         )
@@ -433,56 +521,7 @@ def _close_stale_routine_tasks(jira_connection, latest_build_id, seen_issue_keys
             close_issue(jira_connection, issue_key, build_hash)
 
 
-def report_aft_ratio_for_latest(builds):
-    """
-    Compute and print AFT ratio KPI for latest DONE build vs beginning of quarter.
-    (Same behavior as your previous get_automated_functional_tests_ratio flow, centralized here.)
-    """
-    latest_build = get_latest_done_build(builds)
-    if not latest_build:
-        return
-
-    # Beginning-of-quarter build discovery
-    quarter_start_date, _, _ = get_current_quarter_info()
-    quarter_start = datetime.combine(quarter_start_date, time.min)
-
-    best_build = None
-    best_delta = None
-    for b in builds:
-        due_str = b.get("dueDate")
-        if not due_str:
-            continue
-        dt = parse_execution_date(due_str)
-        if not dt or dt < quarter_start:
-            continue
-        delta = dt - quarter_start
-        if best_delta is None or delta < best_delta:
-            best_delta = delta
-            best_build = b
-
-    if not best_build:
-        print(
-            "✘ Could not find a build from the beginning of the quarter to calculate test ratio."
-        )
-        return
-
-    latest_build_id = latest_build["id"]
-    aft_case_type_id = get_case_type_id_by_name("Automated Functional Test")
-    if not aft_case_type_id:
-        print("✘ Could not find case type ID for 'Automated Functional Test'.")
-        return
-
-    print("⏳ Calculating automated functional test counts...")
-    start_of_quarter_count = get_case_count_by_type_in_build(
-        best_build["id"], aft_case_type_id
-    )
-    current_count = get_case_count_by_type_in_build(latest_build_id, aft_case_type_id)
-    print("✔ Counts calculated.")
-
-    report_poshi_tests_decrease(start_of_quarter_count, current_count)
-
-
-def sort_cases_by_duration(subtask_case_pairs, case_duration_lookup):
+def _sort_cases_by_duration(subtask_case_pairs, case_duration_lookup):
     def safe_duration(c_id):
         d = case_duration_lookup.get(int(c_id))
         return d if isinstance(d, (int, float)) else float("inf")
@@ -490,7 +529,7 @@ def sort_cases_by_duration(subtask_case_pairs, case_duration_lookup):
     return sorted(subtask_case_pairs, key=lambda pair: safe_duration(pair[1]))
 
 
-def format_duration(ms):
+def _format_duration(ms):
     """Convert milliseconds into human-readable duration."""
     if not isinstance(ms, (int, float)):
         return "N/A"
@@ -499,7 +538,7 @@ def format_duration(ms):
     return f"{minutes}m {seconds}s"
 
 
-def get_current_quarter_info():
+def _get_current_quarter_info():
     """
     Returns:
         quarter_start (datetime.date): Start date of the current quarter.
@@ -513,7 +552,7 @@ def get_current_quarter_info():
     return quarter_start, quarter_number, today.year
 
 
-def build_case_rows(sorted_cases, case_duration_lookup, build_id, history_cache):
+def _build_case_rows(sorted_cases, case_duration_lookup, build_id, history_cache):
     printed_rows = []
     rca_info = None
     rca_batch = None
@@ -536,8 +575,8 @@ def build_case_rows(sorted_cases, case_duration_lookup, build_id, history_cache)
             raw_duration = case_duration_lookup.get(int(case_id))
             duration = raw_duration if isinstance(raw_duration, (int, float)) else None
 
-            passing_hash = get_last_passing_git_hash(case_id, build_id, history_cache)
-            failing_hash = get_first_failing_git_hash(case_id, build_id, history_cache)
+            passing_hash = _get_last_passing_git_hash(case_id, build_id, history_cache)
+            failing_hash = _get_first_failing_git_hash(case_id, build_id, history_cache)
 
             github_compare = (
                 f"https://github.com/liferay/liferay-portal/compare/{passing_hash}...{failing_hash}"
@@ -545,10 +584,10 @@ def build_case_rows(sorted_cases, case_duration_lookup, build_id, history_cache)
                 else "###"
             )
 
-            batch_name, test_selector = get_batch_info(case_name, case_type_name)
+            batch_name, test_selector = _get_batch_info(case_name, case_type_name)
 
             if not rca_info and batch_name and test_selector:
-                rca_info = build_rca_block(batch_name, test_selector, github_compare)
+                rca_info = _build_rca_block(batch_name, test_selector, github_compare)
                 rca_batch = batch_name
                 rca_selector = test_selector
                 rca_compare = github_compare
@@ -556,7 +595,7 @@ def build_case_rows(sorted_cases, case_duration_lookup, build_id, history_cache)
             elif not rca_info:
                 rca_info = f"\nCompare: {github_compare}"
 
-            row = [case_name, format_duration(duration), component_name]
+            row = [case_name, _format_duration(duration), component_name]
             printed_rows.append(row)
 
         except Exception as e:
@@ -565,37 +604,37 @@ def build_case_rows(sorted_cases, case_duration_lookup, build_id, history_cache)
     return printed_rows, rca_info, rca_batch, rca_selector, rca_compare, component_name
 
 
-def get_last_passing_git_hash(case_id, build_id, history_cache):
+def _get_last_passing_git_hash(case_id, build_id, history_cache):
     entire_history = history_cache.get(case_id)
     if entire_history is None:
-        entire_history = get_case_result_history_for_routine(case_id)
+        entire_history = _get_case_result_history_for_routine(case_id)
         history_cache[case_id] = entire_history
 
-    result_history_for_build = filter_case_result_history_by_build(
+    result_history_for_build = _filter_case_result_history_by_build(
         entire_history, build_id
     )
     if not result_history_for_build:
         return None
 
     failing_hash_execution_date = result_history_for_build[0].get("executionDate")
-    item = get_last_passing_result(entire_history, failing_hash_execution_date)
+    item = _get_last_passing_result(entire_history, failing_hash_execution_date)
     last_passing_hash = item.get("gitHash") if item else None
     return last_passing_hash
 
 
-def get_first_failing_git_hash(case_id, build_id, history_cache):
+def _get_first_failing_git_hash(case_id, build_id, history_cache):
     """
     Find the first failing git hash after the last passing run for this case.
     """
     entire_history = history_cache.get(case_id)
     if entire_history is None:
-        entire_history = get_case_result_history_for_routine(case_id)
+        entire_history = _get_case_result_history_for_routine(case_id)
         history_cache[case_id] = entire_history
 
     if not entire_history:
         return None
 
-    result_history_for_build = filter_case_result_history_by_build(
+    result_history_for_build = _filter_case_result_history_by_build(
         entire_history, build_id
     )
     if not result_history_for_build:
@@ -603,13 +642,13 @@ def get_first_failing_git_hash(case_id, build_id, history_cache):
 
     failing_execution_date = result_history_for_build[0].get("executionDate")
 
-    last_passing = get_last_passing_result(entire_history, failing_execution_date)
+    last_passing = _get_last_passing_result(entire_history, failing_execution_date)
     if not last_passing:
         return result_history_for_build[0].get("gitHash")
 
-    last_pass_date = parse_execution_date(last_passing["executionDate"])
+    last_pass_date = _parse_execution_date(last_passing["executionDate"])
     for item in reversed(entire_history):
-        exec_date = parse_execution_date(item.get("executionDate"))
+        exec_date = _parse_execution_date(item.get("executionDate"))
         if not exec_date:
             continue
         if (
@@ -621,7 +660,7 @@ def get_first_failing_git_hash(case_id, build_id, history_cache):
     return None
 
 
-def get_batch_info(case_name, case_type_name):
+def _get_batch_info(case_name, case_type_name):
     if case_type_name == "Playwright Test":
         selector = case_name.split(" >")[0] if " >" in case_name else case_name
         return "playwright-js-tomcat101-postgresql163", selector
@@ -636,7 +675,7 @@ def get_batch_info(case_name, case_type_name):
     return None, None
 
 
-def build_rca_block(batch_name, test_selector, github_compare):
+def _build_rca_block(batch_name, test_selector, github_compare):
     return (
         "\nParameters to run Root Cause Analysis on https://test-1-1.liferay.com/job/root-cause-analysis-tool/ :\n"
         f"PORTAL_BATCH_NAME: {batch_name}\n"
@@ -647,7 +686,7 @@ def build_rca_block(batch_name, test_selector, github_compare):
     )
 
 
-def should_skip_result(error):
+def _should_skip_result(error):
     if "AssertionError" in error:
         return False
 
@@ -663,7 +702,7 @@ def should_skip_result(error):
     return any(keyword in (error or "") for keyword in skip_error_keywords)
 
 
-def find_similar_open_issues(
+def _find_similar_open_issues(
     jira_connection, case_id, result_error, *, return_list=False
 ):
     """
@@ -676,8 +715,8 @@ def find_similar_open_issues(
     seen_issues = set()
     similar_open_issues = []
 
-    history = get_case_result_history_for_routine_not_passed(case_id)
-    result_error_norm = normalize_error(result_error)
+    history = _get_case_result_history_for_routine_not_passed(case_id)
+    result_error_norm = _normalize_error(result_error)
 
     for past_result in history:
         issues_str = past_result.get("issues", "")
@@ -702,9 +741,9 @@ def find_similar_open_issues(
             continue
 
         history_error = past_result.get("error", "")
-        history_error_norm = normalize_error(history_error)
+        history_error_norm = _normalize_error(history_error)
 
-        if are_errors_similar(result_error_norm, history_error_norm):
+        if _are_errors_similar(result_error_norm, history_error_norm):
             if return_list:
                 similar_open_issues.extend(open_issues)
                 return similar_open_issues  # stop at first
@@ -717,7 +756,7 @@ def find_similar_open_issues(
     return similar_open_issues if return_list else (False, None)
 
 
-def report_poshi_tests_decrease(start_of_quarter_count, current_count):
+def _report_poshi_tests_decrease(start_of_quarter_count, current_count):
     if start_of_quarter_count == 0:
         print("Cannot calculate decrease percentage (division by zero).")
         return
@@ -740,22 +779,22 @@ def report_poshi_tests_decrease(start_of_quarter_count, current_count):
 
 
 @lru_cache()
-def load_model():
+def _load_model():
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 
-def are_errors_similar(current_norm, history_norm, threshold=0.8):
+def _are_errors_similar(current_norm, history_norm, threshold=0.8):
     """
     Compare two error messages semantically using sentence embeddings.
     """
-    model = load_model()
+    model = _load_model()
     emb_a = model.encode(current_norm, convert_to_tensor=True)
     emb_b = model.encode(history_norm, convert_to_tensor=True)
     similarity = util.pytorch_cos_sim(emb_a, emb_b).item()
     return similarity >= threshold
 
 
-def group_errors_by_type(unique_tasks):
+def _group_errors_by_type(unique_tasks):
     error_to_cases = defaultdict(list)
     for item in unique_tasks:
         error_to_cases[item["error"]].append(
@@ -764,7 +803,7 @@ def group_errors_by_type(unique_tasks):
     return error_to_cases
 
 
-def build_case_duration_lookup(unique_tasks, build_id):
+def _build_case_duration_lookup(unique_tasks, build_id):
     raw_build_results = get_all_build_case_results(build_id)
     interested_case_ids = {
         int(item["case_id"]) for item in unique_tasks if item.get("case_id")
@@ -778,32 +817,32 @@ def build_case_duration_lookup(unique_tasks, build_id):
     }
 
 
-def get_case_result_history_for_routine(case_id):
+def _get_case_result_history_for_routine(case_id):
     items = fetch_case_results(case_id, HEADLESS_ROUTINE_ID)
-    return sort_by_execution_date_desc(items)
+    return _sort_by_execution_date_desc(items)
 
 
-def get_case_result_history_for_routine_not_passed(case_id):
+def _get_case_result_history_for_routine_not_passed(case_id):
     items = fetch_case_results(
         case_id, HEADLESS_ROUTINE_ID, status=STATUS_FAILED_BLOCKED_TESTFIX
     )
-    return sort_by_execution_date_desc(items)
+    return _sort_by_execution_date_desc(items)
 
 
-def sort_by_execution_date_desc(items):
+def _sort_by_execution_date_desc(items):
     def get_sort_key(item):
         date_str = item.get("executionDate", "")
-        parsed_date = parse_execution_date(date_str)
+        parsed_date = _parse_execution_date(date_str)
         return parsed_date or datetime.min
 
     return sorted(items, key=get_sort_key, reverse=True)
 
 
-def get_last_passing_result(entire_history, max_execution_date):
+def _get_last_passing_result(entire_history, max_execution_date):
     status_passed = "PASSED"
 
     if isinstance(max_execution_date, str):
-        max_execution_date = parse_execution_date(max_execution_date)
+        max_execution_date = _parse_execution_date(max_execution_date)
         if not max_execution_date:
             print("❌ Invalid max_due_date format")
             return None
@@ -819,7 +858,7 @@ def get_last_passing_result(entire_history, max_execution_date):
         if not execution_date_str:
             continue
 
-        execution_date = parse_execution_date(execution_date_str)
+        execution_date = _parse_execution_date(execution_date_str)
         if not execution_date or execution_date >= max_execution_date:
             continue
 
@@ -830,18 +869,18 @@ def get_last_passing_result(entire_history, max_execution_date):
     return last_passing
 
 
-def filter_case_result_history_by_build(history, build_id):
+def _filter_case_result_history_by_build(history, build_id):
     """Filter case result history by build ID."""
     return [item for item in history if item.get("testrayBuildId") == build_id]
 
 
-def get_current_build_hash(build_id):
+def _get_current_build_hash(build_id):
     build = get_build_info(build_id)
     git_hash = build.get("gitHash")
     return git_hash
 
 
-def create_investigation_task_for_subtask(
+def _create_investigation_task_for_subtask(
     subtask_unique_failures,
     subtask_id,
     latest_build_id,
@@ -856,8 +895,8 @@ def create_investigation_task_for_subtask(
     test names, components, duration, and RCA details (once).
     """
     # Group by error
-    error_to_cases = group_errors_by_type(subtask_unique_failures)
-    case_duration_lookup = build_case_duration_lookup(
+    error_to_cases = _group_errors_by_type(subtask_unique_failures)
+    case_duration_lookup = _build_case_duration_lookup(
         subtask_unique_failures, latest_build_id
     )
 
@@ -878,7 +917,7 @@ def create_investigation_task_for_subtask(
         description_lines.append("h3. Error")
         description_lines.append(f"{{code}}{error}{{code}}")
 
-        sorted_cases = sort_cases_by_duration(subtask_case_pairs, case_duration_lookup)
+        sorted_cases = _sort_cases_by_duration(subtask_case_pairs, case_duration_lookup)
         (
             printed_rows,
             rca_info,
@@ -886,7 +925,7 @@ def create_investigation_task_for_subtask(
             test_selector,
             github_compare,
             component_name,
-        ) = build_case_rows(
+        ) = _build_case_rows(
             sorted_cases, case_duration_lookup, latest_build_id, case_history_cache
         )
 
@@ -939,42 +978,3 @@ def create_investigation_task_for_subtask(
 
     print(f"✔ Created investigation task for subtask {subtask_id}: {issue.key}")
     return issue
-
-
-def analyze_testflow(builds):
-    """
-    Slim orchestration:
-      1) find latest DONE build + ensure task exists
-      2) fetch testing epic + maybe autofill from previous completed task
-      3) process subtasks & results (collect updates only)
-      4) apply updates and attempt task completion/cleanup
-    """
-    latest_build = get_latest_done_build(builds)
-    if not latest_build:
-        return
-
-    jira_connection = get_jira_connection()
-
-    task_id, latest_build_id = prepare_task(jira_connection, builds, latest_build)
-    if not task_id:
-        print("✘ Could not find or create a valid task, exiting.")
-        return
-
-    epic = find_testing_epic(jira_connection)
-    maybe_autofill_from_previous(builds, latest_build)
-
-    batch_updates, subtasks_to_complete, subtask_to_issues = process_task_subtasks(
-        task_id=task_id,
-        latest_build_id=latest_build_id,
-        jira_connection=jira_connection,
-        epic=epic,
-    )
-
-    finalize_task_completion(
-        task_id=task_id,
-        latest_build_id=latest_build_id,
-        jira_connection=jira_connection,
-        subtasks_to_complete=subtasks_to_complete,
-        subtask_to_issues=subtask_to_issues,
-        batch_updates=batch_updates,
-    )
