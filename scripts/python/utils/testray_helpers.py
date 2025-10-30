@@ -2,6 +2,7 @@ import re
 from collections import defaultdict
 from datetime import datetime, time
 from sentence_transformers import SentenceTransformer, util
+from functools import lru_cache
 from utils.jira_helpers import (
     get_jira_connection,
     get_issue_status_by_key,
@@ -51,9 +52,6 @@ class ComponentMapping:
         "Upgrades Staging": "Data Integration > Staging",  # Assuming same as 'Staging'
     }
 
-
-# Heavy model loaded once here (not in entrypoint)
-model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # ---------------------------------------------------------------------------
 # Entry-point orchestration helpers
@@ -783,10 +781,16 @@ def report_poshi_tests_decrease(start_of_quarter_count, current_count):
         )
 
 
+@lru_cache()
+def load_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+
 def are_errors_similar(current_norm, history_norm, threshold=0.8):
     """
     Compare two error messages semantically using sentence embeddings.
     """
+    model = load_model()
     emb_a = model.encode(current_norm, convert_to_tensor=True)
     emb_b = model.encode(history_norm, convert_to_tensor=True)
     similarity = util.pytorch_cos_sim(emb_a, emb_b).item()
