@@ -7,12 +7,7 @@ from typing import Optional
 BASE_URL = "https://testray.liferay.com/o/c"
 TESTRAY_REST_URL = "https://testray.liferay.com/o/testray-rest/v1.0"
 HEADLESS_ROUTINE_ID = 994140
-
-
-# Status filters
 STATUS_FAILED_BLOCKED_TESTFIX = "FAILED,TESTFIX,BLOCKED"
-
-# ============================ HTTP HELPERS ============================
 
 
 @lru_cache()
@@ -52,9 +47,6 @@ def put_json(url, payload):
     )
     response.raise_for_status()
     return response.json()
-
-
-# ============================ API OPERATIONS ============================
 
 
 def assign_issue_to_case_result_batch(batch_updates):
@@ -125,7 +117,7 @@ def fetch_case_results(case_id, routine_id, status=None, page_size=500):
         all_items.extend(items)
 
         if len(items) < page_size:
-            break  # Last page reached
+            break
         page += 1
 
     return all_items
@@ -237,7 +229,6 @@ def get_routine_to_builds():
     """Fetch all builds for a routine, remove pagination and sort by dateCreated descending."""
     url = f"{BASE_URL}/routines/{HEADLESS_ROUTINE_ID}/routineToBuilds?fields=dueDate,name,id,importStatus,r_routineToBuilds_c_routineId,dateCreated&pageSize=-1"
     items = get_json(url).get("items", [])
-    # Sort by dateCreated descending; fallback to empty string if missing
     return sorted(items, key=lambda b: b.get("dateCreated", ""), reverse=True)
 
 

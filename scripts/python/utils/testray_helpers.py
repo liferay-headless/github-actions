@@ -34,11 +34,6 @@ from utils.testray_api import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Entry-point orchestration helpers
-# ---------------------------------------------------------------------------
-
-
 def get_latest_done_build(builds):
     """Return the newest build only if its import status is DONE; else None."""
     if not builds:
@@ -158,11 +153,6 @@ def maybe_autofill_from_previous(builds, latest_build):
         print("✔ Completed")
 
 
-# ---------------------------------------------------------------------------
-# Subtask processing — scan → resolve (by error group) → stage → complete
-# ---------------------------------------------------------------------------
-
-
 def process_task_subtasks(*, task_id, latest_build_id, jira_connection, epic):
     """
     Iterate subtasks, detect unique failures grouped by error, reuse or create Jira tasks,
@@ -262,9 +252,6 @@ def finalize_task_completion(
     print(f"✔ All subtasks are complete, completing task {task_id}")
     complete_task(task_id)
     print(f"✔ Task {task_id} is now complete. No further processing required.")
-
-
-# ---- scanning, grouping & resolving helpers -------------------------------------
 
 
 def _is_subtask_complete(subtask):
@@ -446,11 +433,6 @@ def _close_stale_routine_tasks(jira_connection, latest_build_id, seen_issue_keys
             close_issue(jira_connection, issue_key, build_hash)
 
 
-# ---------------------------------------------------------------------------
-# KPI helper
-# ---------------------------------------------------------------------------
-
-
 def report_aft_ratio_for_latest(builds):
     """
     Compute and print AFT ratio KPI for latest DONE build vs beginning of quarter.
@@ -498,11 +480,6 @@ def report_aft_ratio_for_latest(builds):
     print("✔ Counts calculated.")
 
     report_poshi_tests_decrease(start_of_quarter_count, current_count)
-
-
-# ---------------------------------------------------------------------------
-# Existing domain logic (kept)
-# ---------------------------------------------------------------------------
 
 
 def sort_cases_by_duration(subtask_case_pairs, case_duration_lookup):
