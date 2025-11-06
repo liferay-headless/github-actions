@@ -10,6 +10,7 @@ from utils.jira_helpers import (
     close_issue,
 )
 from utils.testray_api import (
+    EE_DEVELOPMENT_ACCEPTANCE_MASTER_ID,
     STATUS_FAILED_BLOCKED_TESTFIX,
     HEADLESS_ROUTINE_ID,
     get_build_tasks,
@@ -953,6 +954,23 @@ def _create_investigation_task_for_subtask(
         }.get(c, c)
         for c in (component_name or "Unknown").split(",")
     ]
+
+    label = None
+    try:
+        for _, subtask_case_pairs in error_to_cases.items():
+            for _, case_id, _ in subtask_case_pairs:
+                headless = fetch_case_results(case_id, HEADLESS_ROUTINE_ID)
+                acceptance = fetch_case_results(case_id, EE_DEVELOPMENT_ACCEPTANCE_MASTER_ID)
+                if headless and acceptance:
+                    label = "acceptance-failure"
+                    print(
+                        f"⚙ Subtask {subtask_id}: testcase {case_id} found in both routines → marking as acceptance-failure."
+                    )
+                    break
+            if label:
+                break
+    except Exception as e:
+        print(f"⚠ Could not verify overlap for subtask {subtask_id}: {e}")
 
     # Create Jira issue
     issue = create_jira_task(
