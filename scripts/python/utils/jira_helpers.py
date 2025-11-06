@@ -93,18 +93,17 @@ def create_jira_task(epic, summary, description, component, label):
         "components": components_list,
     }
 
-    jira = _jira()
-    new_issue = _jira.create_issue(fields=issue_dict)
+    new_issue =  _jira().create_issue(fields=issue_dict)
 
-    jira.issue(new_issue.key).update(update={"labels": [{"add": "hl_routine_tasks"}]})
+    _jira().issue(new_issue.key).update(update={"labels": [{"add": "hl_routine_tasks"}]})
 
     if label:
-        jira.issue(new_issue.key).update(update={"labels": [{"add": label}]})
+        _jira().issue(new_issue.key).update(update={"labels": [{"add": label}]})
 
         # If this is an acceptance-failure, make it high priority automatically
         if label == "acceptance-failure":
             try:
-                jira.issue(new_issue.key).update(fields={"priority": {"name": "High"}})
+                _jira().issue(new_issue.key).update(fields={"priority": {"name": "High"}})
                 print(f"🔥 Set {new_issue.key} priority to High (acceptance-failure).")
             except Exception as e:
                 print(f"⚠ Failed to set High priority for {new_issue.key}: {e}")
