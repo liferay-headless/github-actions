@@ -7,6 +7,7 @@ from typing import Optional
 BASE_URL = "https://testray.liferay.com/o/c"
 TESTRAY_REST_URL = "https://testray.liferay.com/o/testray-rest/v1.0"
 HEADLESS_ROUTINE_ID = 994140
+EE_DEVELOPMENT_ACCEPTANCE_MASTER_ID = 590307
 STATUS_FAILED_BLOCKED_TESTFIX = "FAILED,TESTFIX,BLOCKED"
 
 
