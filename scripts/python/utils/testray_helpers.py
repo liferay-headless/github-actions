@@ -3,13 +3,13 @@ from collections import defaultdict
 from datetime import datetime, time
 from sentence_transformers import SentenceTransformer, util
 from functools import lru_cache
-from utils.jira_helpers import (
+from jira_helpers import (
     get_issue_status_by_key,
     create_jira_task,
     get_all_issues,
     close_issue,
 )
-from utils.testray_api import (
+from testray_api import (
     STATUS_FAILED_BLOCKED_TESTFIX,
     HEADLESS_ROUTINE_ID,
     get_build_tasks,
