@@ -100,6 +100,9 @@ def create_jira_task(epic, summary, description, component, label):
     )
     if label:
         _jira().issue(new_issue.key).update(update={"labels": [{"add": label}]})
+    if label == "acceptance_failure":
+        issue = _jira().issue(new_issue.key)
+        issue.update(fields={"priority": {"name": "High"}})
 
     return new_issue
 
