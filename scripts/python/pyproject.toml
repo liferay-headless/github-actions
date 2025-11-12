@@ -1,0 +1,11 @@
+[project]
+name = "github-actions-scripts-python"
+version = "0.1.0"
+description = "Utility of python scripts for GitHub Actions"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "jira==3.10.5",
+    "requests==2.32.5",
+    "sentence-transformers==5.1.0",
+]
