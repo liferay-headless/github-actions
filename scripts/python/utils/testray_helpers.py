@@ -1,4 +1,5 @@
 import sys, os
+
 sys.path.append(os.path.dirname(__file__))
 
 import re
@@ -14,13 +15,16 @@ from jira_helpers import (
 )
 from testray_api import (
     STATUS_FAILED_BLOCKED_TESTFIX,
+    ACCEPTANCE_ROUTINE_ID,
     HEADLESS_ROUTINE_ID,
     get_build_tasks,
+    get_build_sha,
     create_testflow,
     get_build_info,
     fetch_case_results,
     get_all_build_case_results,
     get_component_name,
+    get_build_metrics,
     create_task,
     get_task_status,
     autofill_build,
@@ -49,9 +53,13 @@ def analyze_testflow(builds):
         return
 
     task_id, latest_build_id = _prepare_task(latest_build)
+
     if not task_id:
         print("✘ Could not find or create a valid task, exiting.")
         return
+
+    sha = get_build_sha(latest_build_id)
+    acceptance_build_id = get_acceptance_build_id_for_current_sha(sha)
 
     epic = _find_testing_epic()
     _maybe_autofill_from_previous(builds, latest_build)
@@ -60,6 +68,7 @@ def analyze_testflow(builds):
         task_id=task_id,
         latest_build_id=latest_build_id,
         epic=epic,
+        acceptance_build_id=acceptance_build_id
     )
 
     _finalize_task_completion(
@@ -130,6 +139,13 @@ def _get_latest_done_build(builds):
         return None
     return latest_build
 
+def get_acceptance_build_id_for_current_sha(current_sha):
+    """Find the acceptance build ID matching the given git SHA."""
+    builds = get_build_metrics(ACCEPTANCE_ROUTINE_ID)
+    for build in builds:
+        if build.get("testrayBuildGitHash") == current_sha:
+            return build.get("testrayBuildId")
+    return None
 
 def _prepare_task(latest_build):
     """
@@ -239,7 +255,7 @@ def _maybe_autofill_from_previous(builds, latest_build):
         print("✔ Completed")
 
 
-def _process_task_subtasks(*, task_id, latest_build_id, epic):
+def _process_task_subtasks(*, task_id, latest_build_id, epic, acceptance_build_id):
     """
     Iterate subtasks, detect unique failures grouped by error, reuse or create Jira tasks,
     and build batched updates and completion list.
@@ -283,6 +299,7 @@ def _process_task_subtasks(*, task_id, latest_build_id, epic):
                 task_id=task_id,
                 subtask_id=subtask_id,
                 unique_failures=group,
+                acceptance_build_id=acceptance_build_id,
             )
             batch_updates.extend(updates)
             if issues_str:
@@ -402,9 +419,24 @@ def _group_failures_by_error(unique_failures):
         groups[_normalize_error(f["error"])].append(f)
     return groups
 
+def is_case_in_build(case_id, build_id, routine_id):
+    """
+    Check if a given case_id appears in a specific build within a routine.
+    Uses fetch_case_results() to gather all history, then matches r_buildToCaseResult_c_buildId.
+
+    Returns:
+        bool: True if the case result exists for the given build_id, else False.
+    """
+    case_results = fetch_case_results(case_id, routine_id)
+
+    for result in case_results:
+        if result.get("testrayBuildId") == build_id:
+            return True
+    return False
+
 
 def _resolve_unique_failures(
-    *, epic, latest_build_id, task_id, subtask_id, unique_failures
+    *, epic, latest_build_id, task_id, subtask_id, unique_failures, acceptance_build_id
 ):
     """
     Try to reuse similar open Jira issues; otherwise create an investigation.
@@ -420,6 +452,8 @@ def _resolve_unique_failures(
         probe["error"],
     )
 
+    acceptance_present = is_case_in_build(probe["case_id"], acceptance_build_id, ACCEPTANCE_ROUTINE_ID)
+
     if has_similar_issue and blocked_dict:
         issue_keys_str = blocked_dict["issues"]
         updates = [
@@ -433,6 +467,7 @@ def _resolve_unique_failures(
         f"No similar issue found → create new investigation task for subtask {subtask_id}"
     )
     issue = _create_investigation_task_for_subtask(
+        acceptance_present=acceptance_present,
         subtask_unique_failures=unique_failures,
         subtask_id=subtask_id,
         latest_build_id=latest_build_id,
@@ -873,6 +908,7 @@ def _get_current_build_hash(build_id):
 
 
 def _create_investigation_task_for_subtask(
+    acceptance_present,
     subtask_unique_failures,
     subtask_id,
     latest_build_id,
@@ -957,13 +993,18 @@ def _create_investigation_task_for_subtask(
         for c in (component_name or "Unknown").split(",")
     ]
 
+    label = None
+
+    if acceptance_present:
+        label = "acceptance_failure"
+
     # Create Jira issue
     issue = create_jira_task(
         epic=epic,
         summary=summary,
         description=description,
         component=jira_components,
-        label=None,
+        label=label,
     )
 
     print(f"✔ Created investigation task for subtask {subtask_id}: {issue.key}")
