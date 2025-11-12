@@ -7,6 +7,7 @@ from typing import Optional
 BASE_URL = "https://testray.liferay.com/o/c"
 TESTRAY_REST_URL = "https://testray.liferay.com/o/testray-rest/v1.0"
 HEADLESS_ROUTINE_ID = 994140
+ACCEPTANCE_ROUTINE_ID = 590307
 STATUS_FAILED_BLOCKED_TESTFIX = "FAILED,TESTFIX,BLOCKED"
 
 
@@ -84,7 +85,6 @@ def fetch_case_results(case_id, routine_id, status=None, page_size=500):
         page += 1
 
     return all_items
-
 
 def get_all_build_case_results(build_id):
     """Fetch all case results for a given build (paginated)."""
@@ -188,12 +188,29 @@ def get_component_name(component_id):
     return _get_json(url).get("name", "Unknown")
 
 
-def get_routine_to_builds():
+def get_routine_to_builds(routine_id):
     """Fetch all builds for a routine, remove pagination and sort by dateCreated descending."""
-    url = f"{BASE_URL}/routines/{HEADLESS_ROUTINE_ID}/routineToBuilds?fields=dueDate,name,id,importStatus,r_routineToBuilds_c_routineId,dateCreated&pageSize=-1"
+    url = f"{BASE_URL}/routines/{routine_id}/routineToBuilds?fields=dueDate,name,id,importStatus,gitHash,r_routineToBuilds_c_routineId,dateCreated&pageSize=-1"
     items = _get_json(url).get("items", [])
     return sorted(items, key=lambda b: b.get("dateCreated", ""), reverse=True)
 
+def get_build_sha(build_id):
+    """Get gitHash of a specific build."""
+    url = f"{BASE_URL}/builds/{build_id}?fields=gitHash"
+    return _get_json(url).get("gitHash")
+
+def get_build_metrics(routine_id):
+    """
+    Fetch all acceptance builds with their metrics from Testray REST API.
+    Returns a list of items with fields like:
+      - testrayBuildGitHash
+      - testrayBuildId
+      - testrayBuildName
+      - testrayStatusMetric (dict of counts)
+    """
+    url = f"{TESTRAY_REST_URL}/testray-status-metrics/by-testray-routineId/{routine_id}/testray-builds-metrics"
+    data = _get_json(url)
+    return data.get("items", [])
 
 def get_subtask_case_results(subtask_id):
     """Get case results under a subtask."""
