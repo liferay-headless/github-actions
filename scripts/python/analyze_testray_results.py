@@ -1,13 +1,3 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.10"
-# dependencies = [
-#     "jira==3.10.5",
-#     "requests==2.32.5",
-#     "sentence-transformers==5.1.0",
-# ]
-# ///
-
 from utils.testray_helpers import (
     analyze_testflow,
     report_aft_ratio_for_latest,
