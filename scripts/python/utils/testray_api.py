@@ -241,8 +241,13 @@ def update_subtask_status(subtask_id: str, issues: Optional[str] = None) -> None
 
 
 def _get_json(url):
-    """Send GET request and return JSON response."""
+    """Send GET request and return JSON response. Refresh token if 401."""
     response = requests.get(url, headers=_get_headers())
+
+    if response.status_code == 401:
+        _get_headers.cache_clear()
+        response = requests.get(url, headers=_get_headers())
+
     response.raise_for_status()
     return response.json()
 
