@@ -5,53 +5,104 @@ from functools import lru_cache
 
 def close_issue(issue_key, build_hash):
     """
-    Workflow to close an issue properly:
-    1. Move parent to 'Selected for Development'.
-    2. Close all sub-tasks (created automatically once parent is in SFD).
-    3. Close parent with 'Discarded' resolution.
+    Final optimized flow:
+    1. Load issue
+    2. Validate subtasks, collect the ones that are Open
+       - If any subtask not Open/Closed → ABORT
+    3. Close all Open subtasks immediately
+    4. Move parent to 'Selected for Development'
+    5. Close parent with resolution 'Discarded'
     """
+
     try:
-        parent_issue = _jira().issue(issue_key)
+        jira = _jira()
 
-        # --- Step 1: Parent → 'Selected for Development'
-        transitions = _jira().transitions(issue_key)
-        selected_dev_transition = next(
-            (t for t in transitions if t["name"] == "Selected for Development"), None
-        )
-        if selected_dev_transition:
-            _jira().transition_issue(
-                issue_key, transition=selected_dev_transition["id"]
-            )
-            print(f"✔ {issue_key} → 'Selected for Development'")
-        else:
-            print(
-                f"✘ Could not find 'Selected for Development' transition for {issue_key}"
-            )
-            return
+        # -----------------------------------------
+        # STEP 0: Load parent issue
+        # -----------------------------------------
+        parent_issue = jira.issue(issue_key)
+        current_status = parent_issue.fields.status.name
 
-        # --- Step 2: Close all sub-tasks (after automation creates them)
-        parent_issue = _jira().issue(issue_key)  # refresh to load subtasks
+        print(f"\nℹ Processing {issue_key} (current status: {current_status})")
+
+        # -----------------------------------------
+        # STEP 1: Validate subtasks + collect open ones
+        # -----------------------------------------
         subtasks = getattr(parent_issue.fields, "subtasks", [])
+        open_subtasks = []
+        blocked = False
+
         for subtask in subtasks:
             subtask_key = subtask.key
-            print(f"→ Closing child {subtask_key}")
-            _transition_to_closed(_jira(), subtask_key, build_hash)
+            sub = jira.issue(subtask_key)
+            status_name = sub.fields.status.name
 
-        # --- Step 3: Parent → 'Closed' with resolution 'Discarded'
-        transitions = _jira().transitions(issue_key)
+            if status_name not in ["Open", "Closed"]:
+                print(f"⛔ Sub-task {subtask_key} is '{status_name}'. Aborting.")
+                blocked = True
+            elif status_name == "Open":
+                open_subtasks.append(subtask_key)
+
+        if blocked:
+            print(f"⛔ {issue_key} will NOT be touched due to active subtasks.")
+            return
+
+        print(f"✔ Subtasks valid ({len(open_subtasks)} to close). Proceeding.")
+
+        # -----------------------------------------
+        # STEP 2 (moved): Close all Open subtasks NOW
+        # -----------------------------------------
+        for subtask_key in open_subtasks:
+            print(f"→ Closing child {subtask_key}")
+            _transition_to_closed(subtask_key, build_hash)
+
+        # -----------------------------------------
+        # STEP 3: Move parent to "Selected for Development"
+        # -----------------------------------------
+        if current_status != "Selected for Development":
+            transitions = jira.transitions(issue_key)
+
+            def norm(s):
+                return s.lower().replace(" ", "").replace("-", "")
+
+            target = norm("Selected for Development")
+
+            selected_dev_transition = next(
+                (t for t in transitions if norm(t.get("to", {}).get("name", "")) == target),
+                None,
+            ) or next(
+                (t for t in transitions if target in norm(t["name"])),
+                None,
+            )
+
+            if selected_dev_transition:
+                jira.transition_issue(issue_key, selected_dev_transition["id"])
+                print(f"✔ {issue_key} → '{selected_dev_transition['name']}'")
+                parent_issue = jira.issue(issue_key)
+            else:
+                print("⚠ No transition to 'Selected for Development' found.")
+        else:
+            print(f"✔ {issue_key} already in 'Selected for Development'")
+
+        # -----------------------------------------
+        # STEP 4: Close parent issue
+        # -----------------------------------------
+        transitions = jira.transitions(issue_key)
         close_transition = next((t for t in transitions if t["name"] == "Closed"), None)
+
         if close_transition:
-            _jira().transition_issue(
+            jira.transition_issue(
                 issue_key,
                 transition=close_transition["id"],
                 resolution={"name": "Discarded"},
             )
-            _jira().add_comment(
-                issue_key, f"Closing. Not reproducible in current SHA {build_hash}"
+            jira.add_comment(
+                issue_key,
+                f"Closed. Not reproducible in SHA {build_hash}"
             )
-            print(f"✔ {issue_key} → 'Closed' with 'Discarded'")
+            print(f"✔ {issue_key} → Closed with resolution 'Discarded'")
         else:
-            print(f"✘ Could not find 'Closed' transition for {issue_key}")
+            print("✘ Could not find 'Closed' transition for parent.")
 
     except Exception as e:
         print(f"✘ Failed to process issue {issue_key}: {e}")
@@ -68,7 +119,6 @@ def create_jira_task(epic, summary, description, component, label):
     """
 
     # Normalize components into the correct format
-    components_list = []
     if isinstance(component, str):
         components_list = [{"name": component}]
     elif isinstance(component, list):
@@ -121,6 +171,13 @@ def get_all_issues(jql_str, fields):
             break
     return issues
 
+def get_issue_type_by_key(issue_key):
+    try:
+        issue = _jira().issue(issue_key, fields="issuetype")
+        return issue.fields.issuetype.name
+    except Exception as e:
+        print(f"Error retrieving issue {issue_key}: {e}")
+        return None
 
 def get_issue_status_by_key(issue_key):
     """

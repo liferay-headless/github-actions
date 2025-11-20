@@ -9,6 +9,7 @@ from sentence_transformers import SentenceTransformer, util
 from functools import lru_cache
 from jira_helpers import (
     get_issue_status_by_key,
+    get_issue_type_by_key,
     create_jira_task,
     get_all_issues,
     close_issue,
@@ -140,12 +141,29 @@ def _get_latest_done_build(builds):
     return latest_build
 
 def get_acceptance_build_id_for_current_sha(current_sha):
-    """Find the acceptance build ID matching the given git SHA."""
+    """
+    Find the acceptance build ID matching the given git SHA.
+    If no exact match is found, return the latest (first) build available.
+    """
     builds = get_build_metrics(ACCEPTANCE_ROUTINE_ID)
+
+    if not builds:
+        print("⚠ No builds returned from Testray.")
+        return None
+
+    # 1. Try to match by git hash
     for build in builds:
         if build.get("testrayBuildGitHash") == current_sha:
             return build.get("testrayBuildId")
-    return None
+
+    # 2. No match → fall back to latest build
+    latest_build = builds[0]  # Testray returns newest first
+    print(
+        f"⚠ No build with SHA {current_sha}. "
+        f"Falling back to latest build: {latest_build.get('testrayBuildId')} "
+        f"({latest_build.get('testrayBuildName')})"
+    )
+    return latest_build.get("testrayBuildId")
 
 def _prepare_task(latest_build):
     """
@@ -537,7 +555,7 @@ def _close_stale_routine_tasks(latest_build_id, seen_issue_keys):
     """
     Close open 'hl_routine_tasks' that did not appear in this run (not reproducible).
     """
-    jql = "labels in ('hl_routine_tasks') AND labels not in ('test_fix') AND status = Open"
+    jql = "labels in ('hl_routine_tasks') AND labels not in ('test_fix') AND status not in ('Closed')"
     open_jira_issues = get_all_issues(jql, fields=["key"])
     open_keys = {issue.key for issue in open_jira_issues}
     to_close = open_keys - seen_issue_keys
@@ -758,7 +776,7 @@ def _find_similar_open_issues(case_id, result_error, *, return_list=False):
                 continue
             try:
                 _, status = get_issue_status_by_key(issue_key)
-                if status != "Closed":
+                if status != "Closed":  # <-- keep this
                     open_issues.append(issue_key)
                 seen_issues.add(issue_key)
             except Exception as e:
@@ -772,8 +790,21 @@ def _find_similar_open_issues(case_id, result_error, *, return_list=False):
 
         if _are_errors_similar(result_error_norm, history_error_norm):
             if return_list:
-                similar_open_issues.extend(open_issues)
-                return similar_open_issues  # stop at first
+                bug_issues = []
+                other_issues = []
+
+                for issue_key in open_issues:
+                    issue_type = get_issue_type_by_key(issue_key)
+                    if issue_type and issue_type == "Bug":
+                        bug_issues.append(issue_key)
+                    else:
+                        other_issues.append(issue_key)
+
+                if bug_issues:
+                    return bug_issues
+
+                return other_issues
+
             else:
                 return True, {
                     "dueStatus": {"key": "BLOCKED", "name": "Blocked"},
