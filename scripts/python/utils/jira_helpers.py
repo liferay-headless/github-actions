@@ -68,7 +68,11 @@ def close_issue(issue_key, build_hash):
             target = norm("Selected for Development")
 
             selected_dev_transition = next(
-                (t for t in transitions if norm(t.get("to", {}).get("name", "")) == target),
+                (
+                    t
+                    for t in transitions
+                    if norm(t.get("to", {}).get("name", "")) == target
+                ),
                 None,
             ) or next(
                 (t for t in transitions if target in norm(t["name"])),
@@ -96,10 +100,7 @@ def close_issue(issue_key, build_hash):
                 transition=close_transition["id"],
                 resolution={"name": "Discarded"},
             )
-            jira.add_comment(
-                issue_key,
-                f"Closed. Not reproducible in SHA {build_hash}"
-            )
+            jira.add_comment(issue_key, f"Closed. Not reproducible in SHA {build_hash}")
             print(f"✔ {issue_key} → Closed with resolution 'Discarded'")
         else:
             print("✘ Could not find 'Closed' transition for parent.")
@@ -171,6 +172,7 @@ def get_all_issues(jql_str, fields):
             break
     return issues
 
+
 def get_issue_type_by_key(issue_key):
     try:
         issue = _jira().issue(issue_key, fields="issuetype")
@@ -178,6 +180,7 @@ def get_issue_type_by_key(issue_key):
     except Exception as e:
         print(f"Error retrieving issue {issue_key}: {e}")
         return None
+
 
 def get_issue_status_by_key(issue_key):
     """

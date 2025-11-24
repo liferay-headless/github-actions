@@ -1,4 +1,5 @@
-import sys, os
+import sys
+import os
 
 sys.path.append(os.path.dirname(__file__))
 
@@ -69,7 +70,7 @@ def analyze_testflow(builds):
         task_id=task_id,
         latest_build_id=latest_build_id,
         epic=epic,
-        acceptance_build_id=acceptance_build_id
+        acceptance_build_id=acceptance_build_id,
     )
 
     _finalize_task_completion(
@@ -140,6 +141,7 @@ def _get_latest_done_build(builds):
         return None
     return latest_build
 
+
 def get_acceptance_build_id_for_current_sha(current_sha):
     """
     Find the acceptance build ID matching the given git SHA.
@@ -164,6 +166,7 @@ def get_acceptance_build_id_for_current_sha(current_sha):
         f"({latest_build.get('testrayBuildName')})"
     )
     return latest_build.get("testrayBuildId")
+
 
 def _prepare_task(latest_build):
     """
@@ -437,6 +440,7 @@ def _group_failures_by_error(unique_failures):
         groups[_normalize_error(f["error"])].append(f)
     return groups
 
+
 def is_case_in_build(case_id, build_id, routine_id):
     """
     Check if a given case_id appears in a specific build within a routine.
@@ -470,7 +474,9 @@ def _resolve_unique_failures(
         probe["error"],
     )
 
-    acceptance_present = is_case_in_build(probe["case_id"], acceptance_build_id, ACCEPTANCE_ROUTINE_ID)
+    acceptance_present = is_case_in_build(
+        probe["case_id"], acceptance_build_id, ACCEPTANCE_ROUTINE_ID
+    )
 
     if has_similar_issue and blocked_dict:
         issue_keys_str = blocked_dict["issues"]

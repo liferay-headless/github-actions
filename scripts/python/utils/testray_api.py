@@ -86,6 +86,7 @@ def fetch_case_results(case_id, routine_id, status=None, page_size=500):
 
     return all_items
 
+
 def get_all_build_case_results(build_id):
     """Fetch all case results for a given build (paginated)."""
     page = 1
@@ -194,10 +195,12 @@ def get_routine_to_builds(routine_id):
     items = _get_json(url).get("items", [])
     return sorted(items, key=lambda b: b.get("dateCreated", ""), reverse=True)
 
+
 def get_build_sha(build_id):
     """Get gitHash of a specific build."""
     url = f"{BASE_URL}/builds/{build_id}?fields=gitHash"
     return _get_json(url).get("gitHash")
+
 
 def get_build_metrics(routine_id):
     """
@@ -211,6 +214,7 @@ def get_build_metrics(routine_id):
     url = f"{TESTRAY_REST_URL}/testray-status-metrics/by-testray-routineId/{routine_id}/testray-builds-metrics"
     data = _get_json(url)
     return data.get("items", [])
+
 
 def get_subtask_case_results(subtask_id):
     """Get case results under a subtask."""
