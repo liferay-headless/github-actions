@@ -1,3 +1,5 @@
+#!/usr/bin/env -S uv run
+
 from utils.testray_helpers import (
     analyze_testflow,
     report_aft_ratio_for_latest,

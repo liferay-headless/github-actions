@@ -27,4 +27,4 @@ jobs:
           TESTRAY_CLIENT_SECRET: ${{ secrets.TESTRAY_CLIENT_SECRET }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_API_USER: ${{ secrets.JIRA_API_USER }}
-        run: uv run ./analyze_testray_results.py
+        run: cd ./scripts/python && ./analyze_testray_results.py
