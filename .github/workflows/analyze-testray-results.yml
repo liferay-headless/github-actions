@@ -16,10 +16,6 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
-      - name: Install Python dependencies
-        working-directory: scripts/python
-        run: uv sync
-
       - name: Analyze TestRay results
         working-directory: scripts/python
         env:
