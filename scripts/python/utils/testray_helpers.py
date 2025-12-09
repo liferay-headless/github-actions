@@ -764,60 +764,60 @@ def _find_similar_open_issues(case_id, result_error, *, return_list=False):
         Else: Tuple[bool, dict or None]
     """
     seen_issues = set()
-    similar_open_issues = []
-
     history = _get_case_result_history_for_routine_not_passed(case_id)
     result_error_norm = _normalize_error(result_error)
 
     for past_result in history:
+        # --- Check error similarity first ---
+        past_error = past_result.get("error", "")
+        if not _are_errors_similar(result_error_norm, _normalize_error(past_error)):
+            continue  # irrelevant past result, skip entirely
+
+        # --- Now check issues only for similar errors ---
         issues_str = past_result.get("issues", "")
         if not issues_str:
             continue
 
-        issue_keys = [key.strip() for key in issues_str.split(",")]
         open_issues = []
-
-        for issue_key in issue_keys:
-            if issue_key in seen_issues:
+        for raw_key in issues_str.split(","):
+            issue_key = raw_key.strip()
+            if not issue_key or issue_key in seen_issues:
                 continue
+
             try:
                 _, status = get_issue_status_by_key(issue_key)
-                if status != "Closed":  # <-- keep this
+                if status != "Closed":  # <-- keep
                     open_issues.append(issue_key)
-                seen_issues.add(issue_key)
             except Exception as e:
                 print(f"Error retrieving issue {issue_key}: {e}")
+            finally:
+                seen_issues.add(issue_key)
 
         if not open_issues:
             continue
 
-        history_error = past_result.get("error", "")
-        history_error_norm = _normalize_error(history_error)
+        # --- Found similar error with open issues ---
+        if return_list:
+            bug_issues = []
+            other_issues = []
 
-        if _are_errors_similar(result_error_norm, history_error_norm):
-            if return_list:
-                bug_issues = []
-                other_issues = []
+            for key in open_issues:
+                issue_type = get_issue_type_by_key(key)
+                if issue_type == "Bug":
+                    bug_issues.append(key)
+                else:
+                    other_issues.append(key)
 
-                for issue_key in open_issues:
-                    issue_type = get_issue_type_by_key(issue_key)
-                    if issue_type and issue_type == "Bug":
-                        bug_issues.append(issue_key)
-                    else:
-                        other_issues.append(issue_key)
+            return bug_issues or other_issues
 
-                if bug_issues:
-                    return bug_issues
+        # default return format
+        return True, {
+            "dueStatus": {"key": "BLOCKED", "name": "Blocked"},
+            "issues": ", ".join(open_issues),
+        }
 
-                return other_issues
-
-            else:
-                return True, {
-                    "dueStatus": {"key": "BLOCKED", "name": "Blocked"},
-                    "issues": ", ".join(open_issues),
-                }
-
-    return similar_open_issues if return_list else (False, None)
+    # No similar errors with open issues found
+    return [] if return_list else (False, None)
 
 
 def _report_poshi_tests_decrease(start_of_quarter_count, current_count):
