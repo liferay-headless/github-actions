@@ -1147,14 +1147,14 @@ def _create_investigation_task_for_subtask(
     )
 
     # 🔎 Detect test types present
-    test_types = _detect_test_type(subtask_unique_failures)
+    test_type = _detect_test_type(subtask_unique_failures)
 
     # 🧾 Build adaptive intro
     description_lines = _build_investigation_intro(
         task_id=task_id,
         subtask_id=subtask_id,
         acceptance_present=acceptance_present,
-        test_type=test_types,
+        test_type=test_type,
     )
 
     # ---- EXISTING CONTENT (UNCHANGED) ----
@@ -1201,6 +1201,9 @@ def _create_investigation_task_for_subtask(
             description_lines.append(f"| {name} | {component} | {duration} |")
 
         if not rca_included and batch_name and test_selector and github_compare:
+            if test_type == "playwright":
+                test_selector = "tests/"+ test_selector
+
             description_lines.extend(
                 [
                     "",
@@ -1215,7 +1218,7 @@ def _create_investigation_task_for_subtask(
 
     summary_prefix = []
 
-    if test_types == "poshi":
+    if test_type == "poshi":
         summary_prefix.append("POSHI")
 
     if acceptance_present:
