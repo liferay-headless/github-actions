@@ -976,7 +976,7 @@ def _create_investigation_task_for_subtask(
 
     for error, subtask_case_pairs in error_to_cases.items():
         if not first_error:
-            first_error = error[:80]  # Jira summary
+            first_error = error[:200]
 
         description_lines.append("h3. Error")
         description_lines.append(f"{{code}}{error}{{code}}")
@@ -1025,7 +1025,7 @@ def _create_investigation_task_for_subtask(
             "REST Infrastructure": "REST Infrastructure",
             "Site Templates": "Content Publishing > Site Templates",
             "Staging": "Data Integration > Staging",
-            "Upgrades Staging": "Data Integration > Staging",  # Assuming same as 'Staging'
+            "Upgrades Staging": "Data Integration > Staging",
         }.get(c, c)
         for c in (component_name or "Unknown").split(",")
     ]
