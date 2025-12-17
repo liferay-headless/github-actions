@@ -943,15 +943,153 @@ def _get_current_build_hash(build_id):
     git_hash = build.get("gitHash")
     return git_hash
 
+def _build_investigation_intro(
+        task_id, subtask_id, acceptance_present, test_type
+):
+    lines = [
+        "h2. 🔍 Investigation Purpose & Instructions",
+        "",
+        "*Purpose of this issue*",
+        "",
+        "The purpose of this ticket is to investigate one or more test failures detected in the *Headless routine*:",
+        "https://testray.liferay.com/#/project/35392/routines/994140",
+        "",
+        "This issue aggregates *unique failures* for the related Testray subtask and helps determine whether the failure is caused by:",
+        "* a real product *Bug*, or",
+        "* a required *test fix* (including flakiness or test-layer mismatch).",
+        "",
+    ]
+
+    if acceptance_present:
+        lines.extend(
+            [
+                "*⚠️ Acceptance Failure*",
+                "",
+                "This failure is also triggered as part of the *EE Development Acceptance (master)* routine.",
+                "Issues with the label *acceptance_failure* have *higher priority* and must be investigated first.",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "h3. 🎯 Expected Outcome",
+            "",
+            "Determine whether the failure is caused by a *real Bug* or requires a *test fix*, and take the appropriate action described below.",
+            "",
+        ]
+    )
+
+    # ---- POSHI ONLY OR INCLUDED ----
+    if "poshi" in test_type:
+        lines.extend(
+            [
+                "h3. 🧪 Poshi (Automated Functional Tests)",
+                "",
+                "* Poshi tests must be moved to the *Integration* or *Playwright* layer.",
+                "* Add the label *test_fix* to this issue.",
+                "* You may:",
+                "** work on this ticket directly (if owned by our team or trivial), or",
+                "** move the issue back to *Open* if higher-priority work exists.",
+                "",
+            ]
+        )
+
+    # ---- PLAYWRIGHT ----
+    if "playwright" in test_type:
+        lines.extend(
+            [
+                "h3. 🎭 Playwright Tests",
+                "",
+                "* Fix the issue directly in the *Playwright* layer.",
+                "* Leave a comment with:",
+                "** failing step(s),",
+                "** observed vs expected behavior,",
+                "** relevant investigation details.",
+                "",
+            ]
+        )
+
+    # ---- INTEGRATION ----
+    if "integration" in test_type:
+        lines.extend(
+            [
+                "h3. 🔧 Integration Tests",
+                "",
+                "* Fix the issue directly in the *Integration* layer.",
+                "* Leave a detailed comment describing:",
+                "** the failing test,",
+                "** where and why it fails.",
+                "",
+            ]
+        )
+
+    # ---- BUG FLOW (COMMON) ----
+    lines.extend(
+        [
+            "h3. 🐞 If the failure is caused by a real Bug",
+            "",
+            "* Try to identify the commit that introduced the problem.",
+            "* Use the *RCA information* below (Batch, Test Selector, GitHub Compare).",
+            "* Create a *Bug* with full details.",
+            "",
+            "*If the bug belongs to another team:*",
+            "** Change Bug type to *Regression*.",
+            "** Update the component to match the causing LPD.",
+            "** Set assignee to *Automatic*.",
+            "",
+            "*If caused by Headless development:*",
+            "** Contact the responsible developer, or",
+            "** Inform the team via the *Headless internal Slack channel*.",
+            "",
+            "*Once the Bug is created:*",
+            "** Add label *headless_out_rc* to this ticket (mandatory).",
+            "** Link the Bug LPD as Caused By to this ticket (mandatory).",
+            "** Replace this ticket’s LPD with the Bug LPD in:",
+            f"** [Testray Subtask|https://testray.liferay.com/web/testray#/testflow/{task_id}/subtasks/{subtask_id}] → Subtask Details → ISSUES",
+            "** Close this investigation ticket.",
+            "",
+            "*⚠️ Always keep ticket and subtask status accurate.*",
+            "* If working on a code change → set *In Progress*.",
+            "* Otherwise, the ticket may be auto-closed if not reproducible.",
+            "",
+            "---",
+            "",
+            "*Automatically generated failure details follow below.*",
+            "",
+        ]
+    )
+
+    return lines
+
+def _detect_test_type(subtask_unique_failures):
+    """
+    Returns the detected test layer:
+    "poshi", "playwright", or "integration"
+    Assumes all failures in the subtask belong to the same test type.
+    """
+    if not subtask_unique_failures:
+        return None
+
+    case_type_name = subtask_unique_failures[0].get("caseTypeName")
+
+    if case_type_name == "Automated Functional Test":
+        return "poshi"
+    elif case_type_name == "Playwright Test":
+        return "playwright"
+    elif case_type_name == "Modules Integration Test":
+        return "integration"
+
+    return None
 
 def _create_investigation_task_for_subtask(
-    acceptance_present,
-    subtask_unique_failures,
-    subtask_id,
-    latest_build_id,
-    epic,
-    task_id,
-    case_history_cache,
+        acceptance_present,
+        subtask_unique_failures,
+        subtask_id,
+        latest_build_id,
+        epic,
+        task_id,
+        case_history_cache,
 ):
     """
     Creates an investigation task in Jira for a subtask with unique failures.
@@ -964,11 +1102,25 @@ def _create_investigation_task_for_subtask(
         subtask_unique_failures, latest_build_id
     )
 
-    description_lines = [
-        "*Unique Failures in Testray Subtask*",
-        f"[Testray Subtask|https://testray.liferay.com/web/testray#/testflow/{task_id}/subtasks/{subtask_id}]",
-        "",
-    ]
+    # 🔎 Detect test types present
+    test_types = _detect_test_type(subtask_unique_failures)
+
+    # 🧾 Build adaptive intro
+    description_lines = _build_investigation_intro(
+        task_id=task_id,
+        subtask_id=subtask_id,
+        acceptance_present=acceptance_present,
+        test_type=test_types,
+    )
+
+    # ---- EXISTING CONTENT (UNCHANGED) ----
+    description_lines.extend(
+        [
+            "*Unique Failures in Testray Subtask*",
+            f"[Testray Subtask|https://testray.liferay.com/web/testray#/testflow/{task_id}/subtasks/{subtask_id}]",
+            "",
+        ]
+    )
 
     first_error = None
     rca_included = False
@@ -981,7 +1133,10 @@ def _create_investigation_task_for_subtask(
         description_lines.append("h3. Error")
         description_lines.append(f"{{code}}{error}{{code}}")
 
-        sorted_cases = _sort_cases_by_duration(subtask_case_pairs, case_duration_lookup)
+        sorted_cases = _sort_cases_by_duration(
+            subtask_case_pairs, case_duration_lookup
+        )
+
         (
             printed_rows,
             rca_info,
@@ -990,26 +1145,43 @@ def _create_investigation_task_for_subtask(
             github_compare,
             component_name,
         ) = _build_case_rows(
-            sorted_cases, case_duration_lookup, latest_build_id, case_history_cache
+            sorted_cases,
+            case_duration_lookup,
+            latest_build_id,
+            case_history_cache,
         )
 
         description_lines.append("")
         description_lines.append("|| Test Name || Component || Duration ||")
-        for row in printed_rows:
-            name, duration, component = row
+        for name, duration, component in printed_rows:
             description_lines.append(f"| {name} | {component} | {duration} |")
 
         if not rca_included and batch_name and test_selector and github_compare:
-            description_lines.append("")
-            description_lines.append("h3. RCA Details")
-            description_lines.append("")
-            description_lines.append(f"*Batch:* {batch_name}")
-            description_lines.append(f"*Test Selector:* {test_selector}")
-            description_lines.append(f"*GitHub Compare:* {github_compare}")
+            description_lines.extend(
+                [
+                    "",
+                    "h3. RCA Details",
+                    "",
+                    f"*Batch:* {batch_name}",
+                    f"*Test Selector:* {test_selector}",
+                    f"*GitHub Compare:* {github_compare}",
+                ]
+            )
             rca_included = True
 
-    summary = f"Investigate {first_error}..."
+    summary_prefix = []
+
+    if test_types == "poshi":
+        summary_prefix.append("POSHI")
+
+    if acceptance_present:
+        summary_prefix.append("ACCEPTANCE")
+
+    prefix = f"[{'/'.join(summary_prefix)}] " if summary_prefix else ""
+    summary = f"{prefix}Investigate {first_error}..."
+
     description = "\n".join(description_lines)
+
     jira_components = [
         {
             "API Builder": "API Builder",
@@ -1030,12 +1202,8 @@ def _create_investigation_task_for_subtask(
         for c in (component_name or "Unknown").split(",")
     ]
 
-    label = None
+    label = "acceptance_failure" if acceptance_present else None
 
-    if acceptance_present:
-        label = "acceptance_failure"
-
-    # Create Jira issue
     issue = create_jira_task(
         epic=epic,
         summary=summary,
