@@ -109,7 +109,7 @@ def close_issue(issue_key, build_hash):
         print(f"✘ Failed to process issue {issue_key}: {e}")
 
 
-def create_jira_task(epic, summary, description, component, label):
+def create_jira_task(epic, summary, description, component, label, due_date=None):
     """
     Creates a Jira investigation task for unique failures.
     `component` can be:
@@ -143,6 +143,9 @@ def create_jira_task(epic, summary, description, component, label):
         "issuetype": {"name": "Task"},
         "components": components_list,
     }
+
+    if due_date:
+        issue_dict["duedate"] = due_date
 
     new_issue = _jira().create_issue(fields=issue_dict)
 

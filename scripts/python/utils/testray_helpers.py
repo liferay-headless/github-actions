@@ -5,7 +5,8 @@ sys.path.append(os.path.dirname(__file__))
 
 import re
 from collections import defaultdict
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
+
 from sentence_transformers import SentenceTransformer, util
 from functools import lru_cache
 from jira_helpers import (
@@ -1204,13 +1205,38 @@ def _create_investigation_task_for_subtask(
 
     label = "acceptance_failure" if acceptance_present else None
 
+    today = date.today()
+
+    if acceptance_present:
+        due_date = _add_business_days(today, 2)
+    else:
+        due_date = _add_business_days(today, 4)
+
+    due_date_str = due_date.strftime("%Y-%m-%d")
+
     issue = create_jira_task(
         epic=epic,
         summary=summary,
         description=description,
         component=jira_components,
         label=label,
+        due_date=due_date_str,
     )
 
     print(f"✔ Created investigation task for subtask {subtask_id}: {issue.key}")
     return issue
+
+
+def _add_business_days(start_date, business_days):
+    """
+    Adds business days (Mon–Fri) to a date.
+    """
+    current_date = start_date
+    added_days = 0
+
+    while added_days < business_days:
+        current_date += timedelta(days=1)
+        if current_date.weekday() < 5:  # 0 = Mon, 4 = Fri
+            added_days += 1
+
+    return current_date
