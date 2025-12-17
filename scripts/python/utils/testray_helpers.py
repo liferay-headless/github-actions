@@ -947,19 +947,38 @@ def _get_current_build_hash(build_id):
 def _build_investigation_intro(
         task_id, subtask_id, acceptance_present, test_type
 ):
-    lines = [
-        "h2. 🔍 Investigation Purpose & Instructions",
-        "",
-        "*Purpose of this issue*",
-        "",
-        "The purpose of this ticket is to investigate one or more test failures detected in the *Headless routine*:",
-        "https://testray.liferay.com/#/project/35392/routines/994140",
-        "",
-        "This issue aggregates *unique failures* for the related Testray subtask and helps determine whether the failure is caused by:",
-        "* a real product *Bug*, or",
-        "* a required *test fix* (including flakiness or test-layer mismatch).",
-        "",
-    ]
+    lines = []
+
+    # 🚨 POSHI WARNING BANNER
+    if test_type == "poshi":
+        lines.extend(
+            [
+                "{warning}",
+                "⚠️ *POSHI TEST FAILURE*",
+                "",
+                "This failure originates from *Automated Functional (Poshi) tests*.",
+                "*Poshi tests must NOT be fixed directly.*",
+                "They must be migrated to the *Integration* or *Playwright* layer.",
+                "{warning}",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "h2. 🔍 Investigation Purpose & Instructions",
+            "",
+            "*Purpose of this issue*",
+            "",
+            "The purpose of this ticket is to investigate one or more test failures detected in the *Headless routine*:",
+            "https://testray.liferay.com/#/project/35392/routines/994140",
+            "",
+            "This issue aggregates *unique failures* for the related Testray subtask and defines the investigation workflow to determine:",
+            "* whether the failure is caused by a real product *Bug*, or",
+            "* whether it requires a *test fix* (including flakiness or test-layer mismatch).",
+            "",
+        ]
+    )
 
     if acceptance_present:
         lines.extend(
@@ -972,38 +991,72 @@ def _build_investigation_intro(
             ]
         )
 
+    # ---- INVESTIGATION WORKFLOW ----
     lines.extend(
         [
-            "h3. 🎯 Expected Outcome",
+            "h3. 🧭 Investigation Workflow (Mandatory)",
             "",
-            "Determine whether the failure is caused by a *real Bug* or requires a *test fix*, and take the appropriate action described below.",
+            "*Step 1: Run the failing test(s) locally*",
+            "",
+            "* If the test(s) *PASS locally*: ",
+            "** The failure is likely caused by *flakiness*.",
+            "** Check the *Testray history* for this case in the Headless routine.",
+            "** Determine whether this was a one-time fluke or a strong flakiness case that needs to be addressed.",
+            "",
+            "* If the test(s) *FAIL locally*: continue with Step 2.",
+            "",
+            "*Step 2: Determine whether this is a test fix or intended behavior change*",
+            "",
+            "* Using *RCA* information or manual research, try to identify the commit that introduced the change.",
+            "* In most cases, determining whether a behavior change is intended requires consulting the *developer or team* who made the change.",
+            "",
+            "*As a rule of thumb:*",
+            "* Very small and obvious changes (for example, copy/text updates) can be handled directly.",
+            "* Changes affecting shared behavior (for example, locators or APIs used by multiple tests) should be confirmed with the responsible developer or team, as they may already be addressing related failures reported by other teams.",
+            "",
+            "* If this is confirmed to be a *test fix*:",
+            "** Continue with the handling instructions based on the test type below.",
+            "** Route the ticket based on whether the change was introduced internally or by an external team.",
+            "",
+            "*Step 3: Real product issue (Bug)*",
+            "",
+            "* If the test(s) *FAIL locally* and clearly expose a product issue:",
+            "** Create a *Regression Bug*.",
+            "** Use RCA or manual research to identify the causing commit.",
+            "** Add detailed information to the Bug, including:",
+            "*** which test(s) fail,",
+            "*** what behavior is incorrect,",
+            "*** optional reproduction steps if a minimal workflow is known.",
+            "** Address the Bug with the team that caused the issue.",
             "",
         ]
     )
 
-    # ---- POSHI ONLY OR INCLUDED ----
-    if "poshi" in test_type:
+    # ---- TEST TYPE HANDLING ----
+    if test_type == "poshi":
         lines.extend(
             [
                 "h3. 🧪 Poshi (Automated Functional Tests)",
                 "",
-                "* Poshi tests must be moved to the *Integration* or *Playwright* layer.",
+                "* Poshi tests must be migrated to the *Integration* or *Playwright* layer.",
                 "* Add the label *test_fix* to this issue.",
                 "* You may:",
-                "** work on this ticket directly (if owned by our team or trivial), or",
+                "** work on this ticket directly if the migration is trivial or owned by our team, or",
                 "** move the issue back to *Open* if higher-priority work exists.",
                 "",
             ]
         )
 
-    # ---- PLAYWRIGHT ----
-    if "playwright" in test_type:
+    if test_type == "playwright":
         lines.extend(
             [
                 "h3. 🎭 Playwright Tests",
                 "",
-                "* Fix the issue directly in the *Playwright* layer.",
-                "* Leave a comment with:",
+                "* Fix the issue directly in the *Playwright* layer if owned by our team.",
+                "* If the change was introduced by an external team:",
+                "** reassign the component accordingly,",
+                "** set assignee to *Automatic*.",
+                "* Leave a comment describing:",
                 "** failing step(s),",
                 "** observed vs expected behavior,",
                 "** relevant investigation details.",
@@ -1011,48 +1064,38 @@ def _build_investigation_intro(
             ]
         )
 
-    # ---- INTEGRATION ----
-    if "integration" in test_type:
+    if test_type == "integration":
         lines.extend(
             [
                 "h3. 🔧 Integration Tests",
                 "",
-                "* Fix the issue directly in the *Integration* layer.",
+                "* Integration test failures must always start as a *Regression Bug*.",
+                "* If later confirmed to be only a test fix, the Bug can be updated accordingly.",
+                "* If owned by another team:",
+                "** reassign the component,",
+                "** set assignee to *Automatic*.",
                 "* Leave a detailed comment describing:",
-                "** the failing test,",
-                "** where and why it fails.",
+                "** the failing test(s),",
+                "** where and why the failure occurs.",
                 "",
             ]
         )
 
-    # ---- BUG FLOW (COMMON) ----
+    # ---- BUG WRAP-UP ----
     lines.extend(
         [
-            "h3. 🐞 If the failure is caused by a real Bug",
+            "h3. 🐞 Bug Finalization",
             "",
-            "* Try to identify the commit that introduced the problem.",
-            "* Use the *RCA information* below (Batch, Test Selector, GitHub Compare).",
-            "* Create a *Bug* with full details.",
-            "",
-            "*If the bug belongs to another team:*",
-            "** Change Bug type to *Regression*.",
-            "** Update the component to match the causing LPD.",
-            "** Set assignee to *Automatic*.",
-            "",
-            "*If caused by Headless development:*",
-            "** Contact the responsible developer, or",
-            "** Inform the team via the *Headless internal Slack channel*.",
-            "",
-            "*Once the Bug is created:*",
+            "*Once a Bug is created:*",
             "** Add label *headless_out_rc* to this ticket (mandatory).",
-            "** Link the Bug LPD as Caused By to this ticket (mandatory).",
+            "** Link the Bug LPD as *Caused By* to this ticket (mandatory).",
             "** Replace this ticket’s LPD with the Bug LPD in:",
             f"** [Testray Subtask|https://testray.liferay.com/web/testray#/testflow/{task_id}/subtasks/{subtask_id}] → Subtask Details → ISSUES",
             "** Close this investigation ticket.",
             "",
             "*⚠️ Always keep ticket and subtask status accurate.*",
-            "* If working on a code change → set *In Progress*.",
-            "* Otherwise, the ticket may be auto-closed if not reproducible.",
+            "* If working on a technical solution or code change → set *In Progress*.",
+            "* Otherwise, the ticket may be auto-closed if not reproducible in the next run.",
             "",
             "---",
             "",
