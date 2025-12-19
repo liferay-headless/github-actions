@@ -612,6 +612,7 @@ def _build_case_rows(sorted_cases, case_duration_lookup, build_id, history_cache
     rca_batch = None
     rca_selector = None
     rca_compare = None
+    case_type_name = None
 
     component_name = "Unknown"
 
@@ -655,7 +656,7 @@ def _build_case_rows(sorted_cases, case_duration_lookup, build_id, history_cache
         except Exception as e:
             print(f"[ERROR] Failed to fetch data for case_id={case_id} → {e}")
 
-    return printed_rows, rca_info, rca_batch, rca_selector, rca_compare, component_name
+    return printed_rows, rca_info, rca_batch, rca_selector, rca_compare, component_name, case_type_name
 
 
 def _get_last_passing_git_hash(case_id, build_id, history_cache):
@@ -949,31 +950,18 @@ def _build_investigation_intro(
 ):
     lines = []
 
-    # 🚨 POSHI WARNING BANNER
-    if test_type == "poshi":
-        lines.extend(
-            [
-                "{warning}",
-                "⚠️ *POSHI TEST FAILURE*",
-                "",
-                "This failure originates from *Automated Functional (Poshi) tests*.",
-                "*Poshi tests must NOT be fixed directly.*",
-                "They must be migrated to the *Integration* or *Playwright* layer.",
-                "{warning}",
-                "",
-            ]
-        )
-
+    # ---- INTRO ----
     lines.extend(
         [
             "h2. 🔍 Investigation Purpose & Instructions",
             "",
             "*Purpose of this issue*",
             "",
-            "The purpose of this ticket is to investigate one or more test failures detected in the *Headless routine*:",
-            "https://testray.liferay.com/#/project/35392/routines/994140",
+            "The purpose of this ticket is to investigate one or more test failures detected in the "
+            "[*Headless routine*|https://testray.liferay.com/#/project/35392/routines/994140]",
             "",
-            "This issue aggregates *unique failures* for the related Testray subtask and defines the investigation workflow to determine:",
+            "This issue aggregates *unique failures* for the related Testray subtask and defines the "
+            "investigation workflow to determine:",
             "* whether the failure is caused by a real product *Bug*, or",
             "* whether it requires a *test fix* (including flakiness or test-layer mismatch).",
             "",
@@ -1005,34 +993,23 @@ def _build_investigation_intro(
             "",
             "* If the test(s) *FAIL locally*: continue with Step 2.",
             "",
-            "*Step 2: Determine whether this is a test fix or intended behavior change*",
+            "*Step 2: Determine whether this is a test fix due to an intended behavior/locator change*",
             "",
             "* Using *RCA* information or manual research, try to identify the commit that introduced the change.",
-            "* In most cases, determining whether a behavior change is intended requires consulting the *developer or team* who made the change.",
+            "* In most cases, determining whether the change is intended requires consulting the "
+            "*developer or team* who made the change.",
             "",
             "*As a rule of thumb:*",
-            "* Very small and obvious changes (for example, copy/text updates) can be handled directly.",
-            "* Changes affecting shared behavior (for example, locators or APIs used by multiple tests) should be confirmed with the responsible developer or team, as they may already be addressing related failures reported by other teams.",
+            "* Very small and obvious changes that require test fix (for example, copy/text updates) can be handled directly.",
+            "* Changes affecting shared behavior (for example, locators or APIs used by multiple tests) "
+            "should be confirmed with the responsible developer or team.",
             "",
             "* If this is confirmed to be a *test fix*:",
-            "** Continue with the handling instructions based on the test type below.",
-            "** Route the ticket based on whether the change was introduced internally or by an external team.",
-            "",
-            "*Step 3: Real product issue (Bug)*",
-            "",
-            "* If the test(s) *FAIL locally* and clearly expose a product issue:",
-            "** Create a *Regression Bug*.",
-            "** Use RCA or manual research to identify the causing commit.",
-            "** Add detailed information to the Bug, including:",
-            "*** which test(s) fail,",
-            "*** what behavior is incorrect,",
-            "*** optional reproduction steps if a minimal workflow is known.",
-            "** Address the Bug with the team that caused the issue.",
             "",
         ]
     )
 
-    # ---- TEST TYPE HANDLING ----
+    # ---- TEST TYPE HANDLING (AFTER STEP 2) ----
     if test_type == "poshi":
         lines.extend(
             [
@@ -1047,13 +1024,14 @@ def _build_investigation_intro(
             ]
         )
 
-    if test_type == "playwright":
+    elif test_type == "playwright":
         lines.extend(
             [
                 "h3. 🎭 Playwright Tests",
                 "",
                 "* Fix the issue directly in the *Playwright* layer if owned by our team.",
                 "* If the change was introduced by an external team:",
+                "** add the label *headless_out_rc* to this ticket (mandatory) ,",
                 "** reassign the component accordingly,",
                 "** set assignee to *Automatic*.",
                 "* Leave a comment describing:",
@@ -1064,22 +1042,44 @@ def _build_investigation_intro(
             ]
         )
 
-    if test_type == "integration":
+    elif test_type == "integration":
         lines.extend(
             [
                 "h3. 🔧 Integration Tests",
                 "",
-                "* Integration test failures must always start as a *Regression Bug*.",
-                "* If later confirmed to be only a test fix, the Bug can be updated accordingly.",
-                "* If owned by another team:",
-                "** reassign the component,",
-                "** set assignee to *Automatic*.",
-                "* Leave a detailed comment describing:",
+                "* If you are confident the failure is only a test fix (e.g. JSON copy or expected data change), keep it as a *Test Fix*.",
+                "* If the change is intended and you know what introduced it, you may handle the fix yourself.",
+                "* If the failure was introduced by another team:",
+                "** always add the label *headless_out_rc* to this ticket (mandatory),",
+                "* If you are blocked, reprioritized, or the root cause is unclear:",
+                "** leave investigation and ownership to the team or developer who introduced the change,",
+                "** reassign the component to the LPD corresponding to the commit that introduced the change, if handing over to another team,",
+                "** set assignee to *Automatic* when handing it over.",
+                "* If it is unclear whether this is a test fix or a product issue:",
+                "** convert the task to a *Regression Bug* and follow the Bug Finalization steps.",
+                "* Always leave a detailed comment describing:",
                 "** the failing test(s),",
-                "** where and why the failure occurs.",
+                "** manual reproduction steps, if a minimal workflow is known,",
+                "** a link to the root cause commit or commit range, if identified.",
                 "",
             ]
         )
+    # ---- STEP 3: BUG ----
+    lines.extend(
+        [
+            "*Step 3: Real product issue (Bug)*",
+            "",
+            "* If the test(s) *FAIL locally* and clearly expose a product issue:",
+            "** Create a *Regression Bug*.",
+            "** Use RCA or manual research to identify the causing commit.",
+            "** Add detailed information to the Bug, including:",
+            "*** which test(s) fail,",
+            "*** what behavior is incorrect,",
+            "*** optional reproduction steps if a minimal workflow is known.",
+            "** Address the Bug with the team that caused the issue.",
+            "",
+        ]
+    )
 
     # ---- BUG WRAP-UP ----
     lines.extend(
@@ -1087,7 +1087,7 @@ def _build_investigation_intro(
             "h3. 🐞 Bug Finalization",
             "",
             "*Once a Bug is created:*",
-            "** Add label *headless_out_rc* to this ticket (mandatory).",
+            "** If bug introduced by an external team: add the label *headless_out_rc* to this ticket (mandatory).",
             "** Link the Bug LPD as *Caused By* to this ticket (mandatory).",
             "** Replace this ticket’s LPD with the Bug LPD in:",
             f"** [Testray Subtask|https://testray.liferay.com/web/testray#/testflow/{task_id}/subtasks/{subtask_id}] → Subtask Details → ISSUES",
@@ -1097,30 +1097,16 @@ def _build_investigation_intro(
             "* If working on a technical solution or code change → set *In Progress*.",
             "* Otherwise, the ticket may be auto-closed if not reproducible in the next run.",
             "",
-            "---",
-            "",
-            "*Automatically generated failure details follow below.*",
-            "",
         ]
     )
 
     return lines
 
-def _detect_test_type(subtask_unique_failures):
-    """
-    Returns the detected test layer:
-    "poshi", "playwright", or "integration"
-    Assumes all failures in the subtask belong to the same test type.
-    """
-    if not subtask_unique_failures:
-        return None
-
-    case_type_name = subtask_unique_failures[0].get("caseTypeName")
-
-    if case_type_name == "Automated Functional Test":
-        return "poshi"
-    elif case_type_name == "Playwright Test":
+def _detect_test_type(case_type_name):
+    if case_type_name == "Playwright Test":
         return "playwright"
+    elif case_type_name == "Automated Functional Test":
+        return "poshi"
     elif case_type_name == "Modules Integration Test":
         return "integration"
 
@@ -1145,19 +1131,9 @@ def _create_investigation_task_for_subtask(
     case_duration_lookup = _build_case_duration_lookup(
         subtask_unique_failures, latest_build_id
     )
+    description_lines = []
+    flow_intro = []
 
-    # 🔎 Detect test types present
-    test_type = _detect_test_type(subtask_unique_failures)
-
-    # 🧾 Build adaptive intro
-    description_lines = _build_investigation_intro(
-        task_id=task_id,
-        subtask_id=subtask_id,
-        acceptance_present=acceptance_present,
-        test_type=test_type,
-    )
-
-    # ---- EXISTING CONTENT (UNCHANGED) ----
     description_lines.extend(
         [
             "*Unique Failures in Testray Subtask*",
@@ -1169,6 +1145,7 @@ def _create_investigation_task_for_subtask(
     first_error = None
     rca_included = False
     component_name = None
+    test_type = None
 
     for error, subtask_case_pairs in error_to_cases.items():
         if not first_error:
@@ -1188,11 +1165,22 @@ def _create_investigation_task_for_subtask(
             test_selector,
             github_compare,
             component_name,
+            case_type_name,
         ) = _build_case_rows(
             sorted_cases,
             case_duration_lookup,
             latest_build_id,
             case_history_cache,
+        )
+
+        test_type=_detect_test_type(case_type_name)
+
+        # 🧾 Build adaptive intro
+        flow_intro = _build_investigation_intro(
+            task_id=task_id,
+            subtask_id=subtask_id,
+            acceptance_present=acceptance_present,
+            test_type=test_type,
         )
 
         description_lines.append("")
@@ -1218,6 +1206,9 @@ def _create_investigation_task_for_subtask(
 
     summary_prefix = []
 
+    if test_type == None:
+        return Exception
+
     if test_type == "poshi":
         summary_prefix.append("POSHI")
 
@@ -1227,7 +1218,7 @@ def _create_investigation_task_for_subtask(
     prefix = f"[{'/'.join(summary_prefix)}] " if summary_prefix else ""
     summary = f"{prefix}Investigate {first_error}..."
 
-    description = "\n".join(description_lines)
+    description = "\n".join(description_lines + flow_intro)
 
     jira_components = [
         {
