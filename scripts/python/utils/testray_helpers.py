@@ -1206,9 +1206,6 @@ def _create_investigation_task_for_subtask(
 
     summary_prefix = []
 
-    if test_type == None:
-        return Exception
-
     if test_type == "poshi":
         summary_prefix.append("POSHI")
 
