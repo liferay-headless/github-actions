@@ -1100,6 +1100,50 @@ def _build_investigation_intro(
         ]
     )
 
+    if test_type in ("integration", "playwright"):
+        lines.extend(
+            [
+                "h3. 🧠 Retrospective & Prevention (Mandatory for External Causes)",
+                "",
+                "*Purpose*",
+                "",
+                "When the failure or required fix is caused by an *external team*, a retrospective is required to "
+                "understand *why this issue reached master* and to prevent similar occurrences in the future.",
+                "",
+                "This step is *not part of the investigation workflow itself*, but a *follow-up action* once the "
+                "root cause and ownership are clear.",
+                "",
+                "*Goals of this step:*",
+                "* Identify gaps in CI coverage, test execution, or review processes.",
+                "* Understand whether test failures were:",
+                "** ignored,",
+                "** not executed in the relevant suite,",
+                "** bypassed due to direct master changes, or",
+                "** missed due to process or tooling limitations.",
+                "* Capture learnings that help improve test reliability and release quality going forward.",
+                "",
+                "*Action Required*",
+                "",
+                "* Add an entry to the shared retrospective table:",
+                "** [Google Docs|https://docs.google.com/spreadsheets/d/1SWYSNILlZo2SsgVD-qbjY5OYB20CVNC28006--Q9UKE/edit?usp=sharing]",
+                "",
+                "* Include concise and factual information describing:",
+                "** which tests were affected,",
+                "** the responsible component or area,",
+                "** the root cause (linking the relevant PR or commit),",
+                "** the reason the change reached master despite failures,",
+                "** and any relevant tracking ticket or notes.",
+                "",
+                "*Outcome Expectation*",
+                "",
+                "The intent is *not to assign blame*, but to:",
+                "* surface systemic issues,",
+                "* improve validation and enforcement mechanisms, and",
+                "* reduce recurrence of similar test failures in future releases.",
+                "",
+            ]
+        )
+
     return lines
 
 def _detect_test_type(case_type_name):
