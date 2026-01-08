@@ -1042,10 +1042,10 @@ def _build_investigation_intro(
             ]
         )
 
-    elif test_type == "integration":
+    elif test_type in ("integration", "unit"):
         lines.extend(
             [
-                "h3. 🔧 Integration Tests",
+                "h3. 🔧 Integration/Unit Tests",
                 "",
                 "* If you are confident the failure is only a test fix (e.g. JSON copy or expected data change), keep it as a *Test Fix*.",
                 "* If the change is intended and you know what introduced it, you may handle the fix yourself.",
@@ -1100,7 +1100,7 @@ def _build_investigation_intro(
         ]
     )
 
-    if test_type in ("integration", "playwright"):
+    if test_type in ("integration", "playwright", "unit"):
         lines.extend(
             [
                 "h3. 🧠 Retrospective & Prevention (Mandatory for External Causes)",
@@ -1153,7 +1153,8 @@ def _detect_test_type(case_type_name):
         return "poshi"
     elif case_type_name == "Modules Integration Test":
         return "integration"
-
+    elif case_type_name == "Modules Unit Test":
+        return "unit"
     return None
 
 def _create_investigation_task_for_subtask(
