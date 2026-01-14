@@ -751,7 +751,6 @@ def _should_skip_result(error):
         "Skipped test",
         "The build failed prior to running the test",
         "test-portal-testsuite-upstream-downstream(master) timed out after",
-        "TEST_SETUP_ERROR",
         "Unable to run test on CI",
     ]
     return any(keyword in (error or "") for keyword in skip_error_keywords)
