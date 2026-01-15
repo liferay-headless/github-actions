@@ -1257,7 +1257,7 @@ def _create_investigation_task_for_subtask(
         summary_prefix.append("ACCEPTANCE")
 
     prefix = f"[{'/'.join(summary_prefix)}] " if summary_prefix else ""
-    summary = f"{prefix}Investigate {first_error}..."
+    summary = f"{prefix}Investigate {first_error[:80]}..."
 
     description = "\n".join(description_lines + flow_intro)
 
