@@ -1003,7 +1003,7 @@ def _build_investigation_intro(
             "* Changes affecting shared behavior (for example, locators or APIs used by multiple tests) "
             "should be confirmed with the responsible developer or team.",
             "",
-            "* If this is confirmed to be a *test fix*:",
+            "* If this is confirmed to be a *test fix*, add the label *test_fix* to this issue.",
             "",
         ]
     )
@@ -1015,7 +1015,6 @@ def _build_investigation_intro(
                 "h3. 🧪 Poshi (Automated Functional Tests)",
                 "",
                 "* Poshi tests must be migrated to the *Integration* or *Playwright* layer.",
-                "* Add the label *test_fix* to this issue.",
                 "* You may:",
                 "** work on this ticket directly if the migration is trivial or owned by our team, or",
                 "** move the issue back to *Open* if higher-priority work exists.",
