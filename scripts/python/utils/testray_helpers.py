@@ -562,7 +562,7 @@ def _close_stale_routine_tasks(latest_build_id, seen_issue_keys):
     """
     Close open 'hl_routine_tasks' that did not appear in this run (not reproducible).
     """
-    jql = "labels in ('hl_routine_tasks') AND labels not in ('test_fix') AND status not in ('Closed')"
+    jql = "labels in ('hl_routine_tasks') AND labels not in ('test_fix', 'headless_out_rc') AND status not in ('Closed')"
     open_jira_issues = get_all_issues(jql, fields=["key"])
     open_keys = {issue.key for issue in open_jira_issues}
     to_close = open_keys - seen_issue_keys
