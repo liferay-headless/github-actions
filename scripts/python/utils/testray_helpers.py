@@ -1232,9 +1232,6 @@ def _create_investigation_task_for_subtask(
             description_lines.append(f"| {name} | {component} | {duration} |")
 
         if not rca_included and batch_name and test_selector and github_compare:
-            if test_type == "playwright":
-                test_selector = "tests/"+ test_selector
-
             description_lines.extend(
                 [
                     "",
