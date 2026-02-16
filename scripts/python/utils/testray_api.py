@@ -1,7 +1,10 @@
 import base64
-import requests
-from functools import lru_cache
 import os
+import time
+import requests
+
+from requests.exceptions import RequestException
+from functools import lru_cache
 from typing import Optional
 
 BASE_URL = "https://testray.liferay.com/o/c"
@@ -243,17 +246,35 @@ def update_subtask_status(subtask_id: str, issues: Optional[str] = None) -> None
     _put_json(url, payload)
     print(f"Subtask {subtask_id} marked as COMPLETE.")
 
+def _get_json(url, max_retries=3):
+    last_exception = None
 
-def _get_json(url):
-    """Send GET request and return JSON response. Refresh token if 401."""
-    response = requests.get(url, headers=_get_headers())
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, headers=_get_headers(), timeout=30)
 
-    if response.status_code == 401:
-        _get_headers.cache_clear()
-        response = requests.get(url, headers=_get_headers())
+            if response.status_code == 401:
+                _get_headers.cache_clear()
+                response = requests.get(url, headers=_get_headers(), timeout=30)
 
-    response.raise_for_status()
-    return response.json()
+            response.raise_for_status()
+
+            return response.json()
+
+        except RequestException as e:
+            last_exception = e  # Save the error
+            wait_time = (attempt + 1) * 5
+
+            if attempt < max_retries - 1:
+                print(f"Attempt {attempt + 1} failed ({e}). Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                print("All retry attempts exhausted.")
+
+    if last_exception:
+        raise last_exception
+
+    raise RuntimeError(f"Failed to fetch JSON from {url} after {max_retries} attempts.")
 
 
 def _put_json(url, payload):
