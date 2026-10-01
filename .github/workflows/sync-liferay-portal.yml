@@ -3,7 +3,7 @@ name: Sync liferay-portal fork
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *" 
+    - cron: "17,47 * * * *"
 
 jobs:
   sync_liferay_portal:
@@ -32,5 +32,22 @@ jobs:
           if grep -q "Intruders" intruders.txt; then
             gh issue create --title "Intruders 🦹‍♂️" --body "$(cat intruders.txt)" --repo liferay-headless/liferay-portal
           fi
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+
+      - name: Verify fork is in sync
+        run: |
+          for attempt in 1 2 3; do
+            BEHIND=$(gh api repos/liferay/liferay-portal/compare/master...liferay-headless:liferay-portal:master --jq .behind_by)
+            if [ "$BEHIND" = "0" ]; then
+              echo "liferay-headless/liferay-portal master is in sync with liferay/liferay-portal"
+              exit 0
+            fi
+            echo "Attempt $attempt: fork is $BEHIND commits behind upstream, syncing again"
+            gh repo sync liferay-headless/liferay-portal --source liferay/liferay-portal --branch master
+            sleep 30
+          done
+          echo "::error::liferay-headless/liferay-portal master is still behind liferay/liferay-portal after 3 attempts"
+          exit 1
         env:
           GH_TOKEN: ${{ secrets.PAT }}
